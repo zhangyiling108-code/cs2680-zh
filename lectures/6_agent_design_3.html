@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L06 智能体设计 III：智能体记忆与可靠性 · CS2680</title>
+<link rel="stylesheet" href="../assets/style.css">
+
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">CS2680 <span>现代 AI 系统</span></a>
+  <nav class="lecnav"><a href="../lectures/1_intro.html">L01</a><a href="../lectures/2_agent_use_1.html">L02</a><a href="../lectures/3_agent_use_2.html">L03</a><a href="../lectures/4_agent_design_1.html">L04</a><a href="../lectures/5_agent_design_2.html">L05</a><a class="on" href="../lectures/6_agent_design_3.html">L06</a><a href="../lectures/7_agent_design_4.html">L07</a><a href="../lectures/8_agent_design_5.html">L08</a><a href="../lectures/9_llm_serving_basics_1.html">L09</a><a href="../lectures/10_llm_serving_basics_2a.html">L10</a><a href="../lectures/10_llm_serving_basics_2b.html">L11</a><a href="../lectures/11_llm_serving_basics_3.html">L12</a><a href="../lectures/12_llm_serving_spec_decoding.html">L13</a><a href="../lectures/8_assignment3.html">A3</a></nav>
+  <div class="tools">
+    <div class="seg" role="group" aria-label="显示模式">
+      <button data-mode="both" title="原图 + 中文">对照</button>
+      <button data-mode="zh" title="只看中文">中文</button>
+      <button data-mode="img" title="只看原版">原版</button>
+    </div>
+    <button class="theme" title="切换深浅色" aria-label="切换深浅色">◐</button>
+  </div>
+</header>
+<div class="layout">
+  <aside class="toc"><div class="toc-h">本讲目录</div><ol><li><a href="#s1"><b>1</b>现代 AI 系统：智能体与系统优化</a></li><li><a href="#s2"><b>2</b>事务安排</a></li><li><a href="#s3"><b>3</b>今天的安排</a></li><li><a href="#s4"><b>4</b>（图片页）</a></li><li><a href="#s5"><b>5</b>智能体记忆</a></li><li><a href="#s6"><b>6</b>智能体记忆的设计问题</a></li><li><a href="#s7"><b>7</b>决策：什么时候该把东西变成记忆？</a></li><li><a href="#s8"><b>8</b>如何组织记忆？</a></li><li><a href="#s9"><b>9</b>如何存储记忆？</a></li><li><a href="#s10"><b>10</b>什么时候该使用记忆？</a></li><li><a href="#s11"><b>11</b>如何检索记忆？</a></li><li><a href="#s12"><b>12</b>如何从观察中归纳？</a></li><li><a href="#s13"><b>13</b>遗忘是一等的记忆操作</a></li><li><a href="#s14"><b>14</b>记忆需要有效时间和来源</a></li><li><a href="#s15"><b>15</b>记忆归谁所有？</a></li><li><a href="#s16"><b>16</b>专门的记忆系统</a></li><li><a href="#s17"><b>17</b>智能体记忆设计清单</a></li><li><a href="#s18"><b>18</b>失败模式</a></li><li><a href="#s19"><b>19</b>如何评测智能体记忆</a></li><li><a href="#s20"><b>20</b>智能体记忆评测基准</a></li><li><a href="#s21"><b>21</b>智能体记忆技术栈</a></li><li><a href="#s22"><b>22</b>为什么智能体可靠性是个问题？错误会累积</a></li><li><a href="#s23"><b>23</b>智能体可靠性</a></li><li><a href="#s24"><b>24</b>故障源自哪里？</a></li><li><a href="#s25"><b>25</b>任务说明</a></li><li><a href="#s26"><b>26</b>智能体 Harness</a></li><li><a href="#s27"><b>27</b>模型</a></li><li><a href="#s28"><b>28</b>工具</a></li><li><a href="#s29"><b>29</b>环境</a></li><li><a href="#s30"><b>30</b>为失败而设计</a></li><li><a href="#s31"><b>31</b>下节课</a></li></ol></aside>
+  <main><div class="hero">
+  <div class="kicker">第一部分 · LLM 与智能体入门 · 第 5 周 · 2026-09-28</div>
+  <h1>智能体设计 III：智能体记忆与可靠性</h1>
+  <div class="en">Agents design III: agent memory and reliability</div>
+  <p class="lead">智能体的记忆层次与持久化；智能体在哪里失败、如何提升可靠性。</p>
+  <div class="readings"><b>推荐阅读</b><a href="https://arxiv.org/abs/2509.25370" target="_blank" rel="noopener">Where agents fail</a><a href="https://arxiv.org/abs/2310.08560" target="_blank" rel="noopener">MemGPT</a><a href="https://cs2680.com/readings/sep-28.html" target="_blank" rel="noopener">更多阅读 →</a></div>
+  <div class="meta">共 31 页 · 原版 PDF：<a href="../../6_agent_design_3.pdf">6_agent_design_3.pdf</a> · 键盘 ←/→ 或 J/K 翻页</div>
+</div><section class="slide" id="s1">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/6_agent_design_3/p01.jpg" alt="原版第 1 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">1 / 31</div>
+    <h2>现代 AI 系统：智能体与系统优化</h2>
+    <p>Juncheng Yang</p>
+<p>智能体设计 III：记忆与可靠性</p>
+  </div>
+</section><section class="slide" id="s2">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/6_agent_design_3/p02.jpg" alt="原版第 2 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">2 / 31</div>
+    <h2>事务安排</h2>
+    <ul><li>本周四答疑：3:30pm，SEC 4.308</li><li>期末项目海报展示：12 月 7 日 9am–1pm<ul><li>如果时间不合适，请本周内联系我们</li></ul></li><li>AI 生成的参考资料<ul><li><a href="https://cs2680.com/notes/agent-evaluation" target="_blank" rel="noopener">https://cs2680.com/notes/agent-evaluation</a></li><li>阅读列表中的笔记（列表由我精选）</li><li>经过我和助教的审阅</li></ul></li></ul>
+  </div>
+</section><section class="slide" id="s3">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/6_agent_design_3/p03.jpg" alt="原版第 3 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">3 / 31</div>
+    <h2>今天的安排</h2>
+    <ul><li>多智能体设计（接上节课）</li><li>智能体记忆</li><li>智能体可靠性</li></ul>
+  </div>
+</section><section class="slide" id="s4">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/6_agent_design_3/p04.jpg" alt="原版第 4 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">4 / 31</div>
+    <h2>（图片页）</h2>
+    
+  </div>
+</section><section class="slide" id="s5">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/6_agent_design_3/p05.jpg" alt="原版第 5 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">5 / 31</div>
+    <h2>智能体记忆</h2>
+    <p>超越上下文窗口的持久状态</p>
+<p class="note">（图：用户 → 智能体 Harness ↔ LLM；Harness ↔ 记忆存储）</p>
+<ul><li><strong>上下文窗口</strong>：临时的工作状态</li><li><strong>记忆存储</strong>：跨交互的持久状态</li></ul>
+  </div>
+</section><section class="slide" id="s6">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/6_agent_design_3/p06.jpg" alt="原版第 6 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">6 / 31</div>
+    <h2>智能体记忆的设计问题</h2>
+    <ul><li><strong>值得保留吗？</strong> 写入还是跳过——决策</li><li><strong>该变成什么形式？</strong> 编码 / 组织——格式</li><li><strong>该存在哪里？</strong> 存储——后端</li><li><strong>这个任务需要它吗？</strong> 检索——任务</li><li><strong>能总结出什么更普遍的经验？</strong> 反思 / 泛化——经验</li><li><strong>它还有效吗？</strong> 保留 / 更新 / 删除——状态</li><li>以及：<strong>记忆归谁所有？</strong></li></ul>
+  </div>
+</section><section class="slide" id="s7">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/6_agent_design_3/p07.jpg" alt="原版第 7 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">7 / 31</div>
+    <h2>决策：什么时候该把东西变成记忆？</h2>
+    <p>把每次交互都写下来，召回率和噪声会同时上升。</p>
+<p>从“高召回”到“高精度”的光谱：</p>
+<ul><li>写入每一次交互</li><li>显式的用户请求</li><li>确定性规则（启发式）</li><li>小型分类器</li><li>定期的 LLM 审查</li><li>选择性写入</li></ul>
+  </div>
+</section><section class="slide" id="s8">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/6_agent_design_3/p08.jpg" alt="原版第 8 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">8 / 31</div>
+    <h2>如何组织记忆？</h2>
+    <ul><li><strong>原始事件 / 情节</strong>：“我们把推理服务从 vLLM 迁移到了 SGLang。”——保真度高；体积大、冗余</li><li><strong>非结构化摘要</strong>：“使用 SGLang 提供模型推理服务。”——紧凑，但可能丢失上下文</li><li><strong>结构化状态</strong>：<code>{"serving_engine":"SGLang"…}</code>——可查询；受 schema 约束</li><li><strong>知识图谱</strong>：项目 → USES → SGLang——实体互相关联，并能体现随时间的变化</li></ul>
+<p>举手</p>
+  </div>
+</section><section class="slide" id="s9">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/6_agent_design_3/p09.jpg" alt="原版第 9 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">9 / 31</div>
+    <h2>如何存储记忆？</h2>
+    <ul><li><strong>纯文件</strong>（CLAUDE.md、草稿板）：易于查看、diff 和搜索</li><li><strong>键值或关系型数据库</strong>（Redis、SQLite、Postgres JSONB）：精确查找、过滤和事务</li><li><strong>向量库</strong>（pgvector、Chroma、Pinecone）：精确或近似的相似度搜索</li><li><strong>图数据库</strong>（Neo4j、FalkorDB（Graphiti））：关系查询和多跳遍历</li></ul>
+<p>举手</p>
+  </div>
+</section><section class="slide" id="s10">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/6_agent_design_3/p10.jpg" alt="原版第 10 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">10 / 31</div>
+    <h2>什么时候该使用记忆？</h2>
+    <ul><li><strong>自动</strong>：每一轮都“搜索 → LLM → 写入”。＋可预测、简单；－增加延迟和无关上下文</li><li><strong>由运行时控制</strong>：<code>if memory_needed: search()</code>；<code>if memorable: add()</code>。＋有选择、高效；－需要规则或分类器</li><li><strong>由模型控制</strong>：<code>search_memory()</code>、<code>add_memory()</code>、<code>update_memory()</code>、<code>forget_memory()</code>。＋按需驱动，由 LLM 决定何时调用；－可能漏掉有用的读写</li></ul>
+<div class="callout">许多系统采用混合方式；读和写的策略可以不同。</div>
+  </div>
+</section><section class="slide" id="s11">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/6_agent_design_3/p11.jpg" alt="原版第 11 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">11 / 31</div>
+    <h2>如何检索记忆？</h2>
+    <p>语义相关性只是检索信号之一。</p>
+<p><strong>基础流程</strong>：查询 → 向量搜索 → top-k 条记忆 → 提示词</p>
+<p><strong>其他信号</strong></p>
+<ul><li><strong>语义匹配</strong>：含义与查询相符</li><li><strong>范围</strong>：同一个用户、项目、实体或任务</li><li><strong>重要性</strong>：漏掉或纳入它的代价</li><li><strong>有效性</strong>：此时此刻对这个任务是否成立</li><li><strong>来源</strong>：出处、置信度和证据</li></ul>
+  </div>
+</section><section class="slide" id="s12">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/6_agent_design_3/p12.jpg" alt="原版第 12 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">12 / 31</div>
+    <h2>如何从观察中归纳？</h2>
+    <ul><li>问过 vLLM / 问过 SGLang / 问过 TRT-LLM / 问过 LLM 调度</li><li>→ 反思 → <strong>假设</strong>：经常关注 LLM 推理系统；<strong>置信度</strong>：中</li></ul>
+<p><strong>什么时候做整合（consolidation）？</strong></p>
+<ul><li>积累了足够的新证据之后，例如每 N 个事件或上下文填满时</li><li>事实冲突或重复出现时</li><li>尽可能放在后台任务中进行</li></ul>
+  </div>
+</section><section class="slide" id="s13">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/6_agent_design_3/p13.jpg" alt="原版第 13 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">13 / 31</div>
+    <h2>遗忘是一等的记忆操作</h2>
+    <p><strong>为什么要遗忘</strong></p>
+<ul><li>信息过时</li><li>信息错误或相互冲突</li><li>隐私与安全</li><li>存储和检索成本</li></ul>
+<p><strong>生命周期控制</strong></p>
+<ul><li>标记为无效</li><li>永久擦除</li><li>按 TTL 过期</li><li>分层，并从活跃记忆中逐出</li></ul>
+  </div>
+</section><section class="slide" id="s14">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/6_agent_design_3/p14.jpg" alt="原版第 14 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">14 / 31</div>
+    <h2>记忆需要有效时间和来源</h2>
+    <ul><li>2026 年 4 月：项目用 vLLM 提供模型服务（已被取代）</li><li>2026 年 6 月：项目用 SGLang 提供模型服务（当前）</li><li><strong>有效时间</strong>：哪个事实在什么时候适用</li><li><strong>来源</strong>：这个事实从哪里来——情节 28：“我们把推理服务从 vLLM 迁移到了 SGLang。”→ 项目 → SERVES_WITH → SGLang（来源：情节 28）</li></ul>
+  </div>
+</section><section class="slide" id="s15">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/6_agent_design_3/p15.jpg" alt="原版第 15 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">15 / 31</div>
+    <h2>记忆归谁所有？</h2>
+    <ul><li><strong>智能体自有</strong>：Harness 中的文件——CLAUDE.md、智能体草稿板、任务笔记。Harness 把记忆持久化到磁盘</li><li><strong>专门的记忆系统</strong>：智能体调用的服务——Mem0、Graphiti、supermemory。记忆是一个 API，在多个智能体和会话之间共享</li></ul>
+<p class="note">（图：左——Harness ↔ LLM，读写 CLAUDE.md 与任务笔记；右——Harness ↔ LLM，通过“搜索 · 更新”访问记忆层（库或服务））</p>
+  </div>
+</section><section class="slide" id="s16">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/6_agent_design_3/p16.jpg" alt="原版第 16 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">16 / 31</div>
+    <h2>专门的记忆系统</h2>
+    <p><strong>Mem0——以事实为中心</strong></p>
+<ul><li>输入：消息，按用户、智能体或运行限定范围</li><li>检索：带过滤的向量搜索；可选图记忆</li><li>例：“使用 SGLang 提供模型推理服务。”</li></ul>
+<p><strong>Graphiti——时序知识图谱</strong></p>
+<ul><li>输入：情节，从中抽取实体和带时间的事实</li><li>检索：语义、关键词与图搜索的混合</li><li>例：uses → SGLang，有效期 2026 年 4 月 → 至今</li></ul>
+<p><strong>supermemory——画像、记忆、文档</strong></p>
+<ul><li>在记忆和文档之外维护一份用户画像</li><li>输入：与来源和时间关联的对话</li><li>检索：画像、记忆和文档搜索</li></ul>
+  </div>
+</section><section class="slide" id="s17">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/6_agent_design_3/p17.jpg" alt="原版第 17 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">17 / 31</div>
+    <h2>智能体记忆设计清单</h2>
+    <ul><li><strong>观察 / 选择</strong>：这值得记住吗？</li><li><strong>编码 / 组织</strong>：什么表示形式能保留所需的含义？</li><li><strong>存储</strong>：放在哪里？文件、数据库？</li><li><strong>检索</strong>：什么对当前任务有用？</li><li><strong>反思 / 整合</strong>：这会更新或与旧记忆冲突吗？</li><li><strong>遗忘</strong>：信息什么时候过时或无关？</li></ul>
+<div class="callout">每个阶段都是一项策略决策。</div>
+  </div>
+</section><section class="slide" id="s18">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/6_agent_design_3/p18.jpg" alt="原版第 18 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">18 / 31</div>
+    <h2>失败模式</h2>
+    <ul><li><strong>检索遗漏</strong>：相关记忆存在，但没找到</li><li><strong>上下文污染</strong>：太多无关记忆进入上下文</li><li><strong>记忆幻觉</strong>：把推断当作事实存下来——“在哈佛读书”变成了“在哈佛做访问学生”</li><li><strong>过时</strong>：旧事实压过了新信息</li><li><strong>隔离失败</strong>：记忆越过了用户边界</li><li><strong>过度泛化</strong>：一次事件变成了持久偏好</li><li><strong>持久化的提示词注入</strong>：不可信内容之后以“指令”的形式返回</li><li><strong>无界增长</strong>：体积随生命周期增长，检索成本和质量随之下降</li></ul>
+<p>举手</p>
+  </div>
+</section><section class="slide" id="s19">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/6_agent_design_3/p19.jpg" alt="原版第 19 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">19 / 31</div>
+    <h2>如何评测智能体记忆</h2>
+    <ul><li><strong>写入与更新</strong>：精确率、召回率、过时记忆比例</li><li><strong>检索</strong>：精确率、召回率</li><li><strong>系统</strong>：延迟、token 开销、存储增长</li><li><strong>治理</strong>：删除合规性、范围隔离</li></ul>
+  </div>
+</section><section class="slide" id="s20">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/6_agent_design_3/p20.jpg" alt="原版第 20 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">20 / 31</div>
+    <h2>智能体记忆评测基准</h2>
+    <ul><li><strong>LoCoMo</strong>：1,540 个问题，10 段长对话</li><li><strong>LongMemEval</strong>：500 个问题，5 种记忆能力</li><li><strong>BEAM</strong>：2,000 个问题，最长 1000 万 token</li></ul>
+<p>记忆组件评测：LoCoMo（ACL 2024）· LongMemEval（ICLR 2025）· BEAM（ICLR 2026）· LoCoMo-Refined</p>
+<div class="callout">主要测试智能体能否在用户—助手的历史上回忆和推理，涵盖回忆、时序推理、更新、偏好和拒答。</div>
+  </div>
+</section><section class="slide" id="s21">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/6_agent_design_3/p21.jpg" alt="原版第 21 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">21 / 31</div>
+    <h2>智能体记忆技术栈</h2>
+    <p><strong>独立的记忆层</strong></p>
+<ul><li>智能体运行时：Claude Code、Letta、Codex</li><li>记忆管理：Mem0、Letta 内置、自研</li><li>存储：向量、SQL、图、对象存储</li></ul>
+<p><strong>记忆在 Harness 内部</strong></p>
+<ul><li>智能体运行时：Claude Code、Letta、Codex</li><li>记忆管理：在运行时内部</li><li>存储：Markdown 文件</li></ul>
+  </div>
+</section><section class="slide" id="s22">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/6_agent_design_3/p22.jpg" alt="原版第 22 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">22 / 31</div>
+    <h2>为什么智能体可靠性是个问题？错误会累积</h2>
+    <p>假设每一步以 0.95 的概率独立成功，智能体一次运行完全无错的概率随轨迹步数变化：</p>
+<ul><li>1 步：95%；5 步：77%；10 步：60%；20 步：36%；50 步：8%</li><li>50 步的运行，只有约 <strong>1/13</strong> 能零错误完成</li><li>只有每一步都成功，整次运行才成功</li><li>错误传播会让真实运行比这更糟</li></ul>
+  </div>
+</section><section class="slide" id="s23">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/6_agent_design_3/p23.jpg" alt="原版第 23 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">23 / 31</div>
+    <h2>智能体可靠性</h2>
+    <p>智能体有哪些不同的失败方式？</p>
+  </div>
+</section><section class="slide" id="s24">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/6_agent_design_3/p24.jpg" alt="原版第 24 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">24 / 31</div>
+    <h2>故障源自哪里？</h2>
+    <ul><li><strong>用户 / 任务说明</strong>：目标是否明确？→ 说明失败</li><li><strong>智能体 Harness</strong>：上下文、循环、调度 → Harness 失败</li><li><strong>LLM</strong>：推理与规划 → 模型失败</li><li><strong>工具层</strong>：shell、浏览器、API → 工具失败</li><li><strong>环境</strong>：仓库、操作系统、网页、服务 → 环境失败</li></ul>
+  </div>
+</section><section class="slide" id="s25">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/6_agent_design_3/p25.jpg" alt="原版第 25 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">25 / 31</div>
+    <h2>任务说明</h2>
+    <div class="tbl"><table><thead><tr><th>失败</th><th>说明里写的</th><th>智能体做的</th><th>修复</th></tr></thead><tbody><tr><td>目标含糊</td><td>“修复登录 bug”</td><td>修了三个里错的那个</td><td>写明文件、症状和复现方法</td></tr><tr><td>代理目标</td><td>“让测试通过”</td><td>把失败的测试删了</td><td>禁止改测试；审查 diff</td></tr><tr><td>未说明的约束</td><td>“加快搜索”</td><td>破坏了公共 API</td><td>写明哪些东西不能改</td></tr><tr><td>没有完成的定义</td><td>“清理一下解析器”</td><td>无休止地重构</td><td>给出退出测试和停止规则</td></tr><tr><td>目标冲突</td><td>“diff 最小，且覆盖所有边界情况”</td><td>悄悄丢掉了边界情况</td><td>显式给目标排优先级</td></tr></tbody></table></div>
+  </div>
+</section><section class="slide" id="s26">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/6_agent_design_3/p26.jpg" alt="原版第 26 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">26 / 31</div>
+    <h2>智能体 Harness</h2>
+    <div class="tbl"><table><thead><tr><th>失败</th><th>Harness 做了什么</th><th>后果</th><th>修复</th></tr></thead><tbody><tr><td>上下文截断错误</td><td>剪掉了最早的轮次</td><td>忘了“保持 API 不变”的规则</td><td>把关键规则钉在窗口之外</td></tr><tr><td>记忆错误</td><td>把过时笔记当作事实召回</td><td>编辑了一个已被移走的文件</td><td>给记忆标日期；使用前复核</td></tr><tr><td>状态损坏错误</td><td>保留了一个只应用了一半的编辑</td><td>后续步骤建立在损坏的文件上</td><td>打检查点；回滚失败的步骤</td></tr><tr><td>控制循环错误</td><td>没有设定步数或成本预算</td><td>200 步毫无进展</td><td>限制步数、成本和时间</td></tr><tr><td>阻塞式扇出</td><td>等待每一个子智能体</td><td>一个慢的子任务拖住整次运行</td><td>设超时；使用部分结果</td></tr></tbody></table></div>
+  </div>
+</section><section class="slide" id="s27">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/6_agent_design_3/p27.jpg" alt="原版第 27 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">27 / 31</div>
+    <h2>模型</h2>
+    <div class="tbl"><table><thead><tr><th>失败</th><th>模型的推理</th><th>智能体做的</th><th>修复</th></tr></thead><tbody><tr><td>幻觉</td><td>“requests.fetch() 存在”</td><td>调用了不存在的函数</td><td>对照真实文档检查调用</td></tr><tr><td>违反指令</td><td>“速度比 API 更重要”</td><td>改了被要求保留的函数签名</td><td>重申约束；检查 diff</td></tr><tr><td>推理错误</td><td>“超时意味着网络断了”</td><td>给一个死锁加了重试</td><td>修复前先验证假设</td></tr><tr><td>推理与行动不一致</td><td>“我只改 parser.py”</td><td>重写了另外三个文件</td><td>把每个动作与计划对比</td></tr><tr><td>未验证的成功</td><td>“测试现在大概能过了”</td><td>什么都没跑就宣布完成</td><td>要求以测试输出作为证明</td></tr><tr><td>长程退化</td><td>“配置还需要修”</td><td>撤销了自己在第 12 步做的修复</td><td>重读状态；拆成短任务</td></tr></tbody></table></div>
+  </div>
+</section><section class="slide" id="s28">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/6_agent_design_3/p28.jpg" alt="原版第 28 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">28 / 31</div>
+    <h2>工具</h2>
+    <div class="tbl"><table><thead><tr><th>失败</th><th>工具返回了</th><th>智能体做的</th><th>修复</th></tr></thead><tbody><tr><td>输出被截断</td><td>日志的前 100 行</td><td>错过了第 4,000 行的错误</td><td>错误优先返回；支持分页</td></tr><tr><td>静默失败</td><td>退出码 0，结果为空</td><td>以为没有匹配项</td><td>区分“为空”与“失败”</td></tr><tr><td>schema 含糊</td><td>一个没有时区的日期</td><td>任务排期偏了 8 小时</td><td>使用类型化、显式的 schema</td></tr><tr><td>不稳定的调用</td><td>第一次尝试超时</td><td>宣布服务宕机</td><td>带退避重试后再下结论</td></tr><tr><td>误导性错误</td><td>拼写错误却报“权限被拒绝”</td><td>用 sudo 重试</td><td>返回精确、可操作的错误</td></tr></tbody></table></div>
+  </div>
+</section><section class="slide" id="s29">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/6_agent_design_3/p29.jpg" alt="原版第 29 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">29 / 31</div>
+    <h2>环境</h2>
+    <div class="tbl"><table><thead><tr><th>失败</th><th>环境中存在</th><th>智能体做的</th><th>修复</th></tr></thead><tbody><tr><td>过时状态</td><td>昨天缓存的构建</td><td>在旧代码上通过了测试</td><td>从干净缓存重新构建</td></tr><tr><td>版本不匹配</td><td>Python 3.8 而不是 3.12</td><td>交付了会崩溃的代码</td><td>在 lockfile 中锁定版本</td></tr><tr><td>随机失败</td><td>任务成败取决于环境</td><td>因为闰年而失败</td><td>重跑失败项；隔离不稳定用例</td></tr><tr><td>网页布局变化</td><td>结账页面改版了</td><td>点错了按钮</td><td>行动前重新读取页面</td></tr><tr><td>限流</td><td>50 次调用后返回 HTTP 429</td><td>迁移做到一半停了</td><td>限速，并为长任务打检查点</td></tr></tbody></table></div>
+  </div>
+</section><section class="slide" id="s30">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/6_agent_design_3/p30.jpg" alt="原版第 30 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">30 / 31</div>
+    <h2>为失败而设计</h2>
+    <ul><li><strong>任务说明——把“完成”写成测试</strong>：预先写好验收测试；列出不能改动的内容</li><li><strong>智能体 Harness——给每次运行设边界</strong>：步数、成本和时间上限；检查点与回滚</li><li><strong>模型——要求证据</strong>：每个结论都要有证据；验证；使用更强的模型</li><li><strong>工具——大声失败</strong>：类型化 schema；错误与“为空”区分开</li><li><strong>环境——锁定与隔离</strong>：全新、锁定版本的沙箱；先重试不稳定项再下结论</li></ul>
+<div class="callout">我们对大规模运行的智能体还缺乏理解，正式的最佳实践也很少。</div>
+  </div>
+</section><section class="slide" id="s31">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/6_agent_design_3/p31.jpg" alt="原版第 31 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">31 / 31</div>
+    <h2>下节课</h2>
+    <ul><li>智能体评测</li><li>高性价比的智能体</li><li>案例研究</li></ul>
+  </div>
+</section><nav class="pager"><a href="5_agent_design_2.html">← L05 智能体设计 II：多智能体架构、协调与通信</a><a href="7_agent_design_4.html">L07 智能体设计 IV：智能体评测 →</a></nav></main>
+</div>
+<div class="lightbox" hidden><img alt=""></div>
+<script src="../assets/app.js"></script>
+</body>
+</html>

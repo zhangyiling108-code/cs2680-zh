@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L09 高效 LLM 推理服务基础 I：LLM 入门 · CS2680</title>
+<link rel="stylesheet" href="../assets/style.css">
+
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">CS2680 <span>现代 AI 系统</span></a>
+  <nav class="lecnav"><a href="../lectures/1_intro.html">L01</a><a href="../lectures/2_agent_use_1.html">L02</a><a href="../lectures/3_agent_use_2.html">L03</a><a href="../lectures/4_agent_design_1.html">L04</a><a href="../lectures/5_agent_design_2.html">L05</a><a href="../lectures/6_agent_design_3.html">L06</a><a href="../lectures/7_agent_design_4.html">L07</a><a href="../lectures/8_agent_design_5.html">L08</a><a class="on" href="../lectures/9_llm_serving_basics_1.html">L09</a><a href="../lectures/10_llm_serving_basics_2a.html">L10</a><a href="../lectures/10_llm_serving_basics_2b.html">L11</a><a href="../lectures/11_llm_serving_basics_3.html">L12</a><a href="../lectures/12_llm_serving_spec_decoding.html">L13</a><a href="../lectures/8_assignment3.html">A3</a></nav>
+  <div class="tools">
+    <div class="seg" role="group" aria-label="显示模式">
+      <button data-mode="both" title="原图 + 中文">对照</button>
+      <button data-mode="zh" title="只看中文">中文</button>
+      <button data-mode="img" title="只看原版">原版</button>
+    </div>
+    <button class="theme" title="切换深浅色" aria-label="切换深浅色">◐</button>
+  </div>
+</header>
+<div class="layout">
+  <aside class="toc"><div class="toc-h">本讲目录</div><ol><li><a href="#s1"><b>1</b>现代 AI 系统：智能体与系统优化</a></li><li><a href="#s2"><b>2</b>事务安排</a></li><li><a href="#s3"><b>3</b>今天的安排</a></li><li><a href="#s4"><b>4</b>一个 LLM 请求的生命周期</a></li><li><a href="#s5"><b>5</b>阶段 1：分词</a></li><li><a href="#s6"><b>6</b>阶段 2：调度与批处理</a></li><li><a href="#s7"><b>7</b>阶段 3：预填充</a></li><li><a href="#s8"><b>8</b>阶段 4：解码生成 logits；采样选出下一个 token</a></li><li><a href="#s9"><b>9</b>阶段 5：反分词与流式输出</a></li><li><a href="#s10"><b>10</b>生命周期：要点总结</a></li><li><a href="#s11"><b>11</b>窥探模型内部</a></li><li><a href="#s12"><b>12</b>符号约定</a></li><li><a href="#s13"><b>13</b>LLM 是一摞相同的 Transformer 块</a></li><li><a href="#s14"><b>14</b>每个块在残差流上加上注意力和 MLP，各自前面都有 RMSNorm</a></li><li><a href="#s15"><b>15</b>自注意力让每个 token 读取它之前的所有 token</a></li><li><a href="#s16"><b>16</b>每个 token 是 X 的一行；权重矩阵把它变成 Q、K、V</a></li><li><a href="#s17"><b>17</b>QKᵀ 给每对 token 打分；softmax 把每行变成权重</a></li><li><a href="#s18"><b>18</b>注意力的计算复杂度是 O(n²)</a></li><li><a href="#s19"><b>19</b>多头注意力并行运行 64 个小注意力，再用 W_O 混合</a></li><li><a href="#s20"><b>20</b>每个头用自己的 128 维做注意力，因此各头学到不同的模式</a></li><li><a href="#s21"><b>21</b>共享 key/value 头可以缩小 KV cache</a></li><li><a href="#s22"><b>22</b>以 Llama 3 70B 为例</a></li><li><a href="#s23"><b>23</b>Llama 3 70B：参数都在哪里</a></li><li><a href="#s24"><b>24</b>系统直觉：权重、计算量和 KV cache 决定了预填充、解码与内存</a></li><li><a href="#s25"><b>25</b>MoE 把每个块的 FFN 替换为一个路由器和一组更小的专家 FFN</a></li><li><a href="#s26"><b>26</b>稠密 vs MoE：内存随总参数量增长，计算随激活参数量增长</a></li><li><a href="#s27"><b>27</b>高级 LLM 变体</a></li><li><a href="#s28"><b>28</b>滑动窗口层限制 KV cache 大小；少量全局层保留长程回忆</a></li><li><a href="#s29"><b>29</b>MLA 为每个 token 只存一个压缩后的潜向量</a></li><li><a href="#s30"><b>30</b>线性注意力层保持固定大小的状态，而不是不断增长的 KV cache</a></li><li><a href="#s31"><b>31</b>状态空间模型同样保持固定大小的状态</a></li><li><a href="#s32"><b>32</b>稀疏注意力：每个 query 只读取前 2,048 个最相关的历史 token</a></li><li><a href="#s33"><b>33</b>循环 Transformer：同一个块重复使用多次，深度消耗的是计算而不是权重</a></li><li><a href="#s34"><b>34</b>扩散语言模型：通过几步并行细化来填充被遮蔽的 token</a></li><li><a href="#s35"><b>35</b>下节课</a></li><li><a href="#s36"><b>36</b>选读材料</a></li></ol></aside>
+  <main><div class="hero">
+  <div class="kicker">第二部分 · 面向 LLM 与智能体的系统 · 第 8 周 · 2026-10-19</div>
+  <h1>高效 LLM 推理服务基础 I：LLM 入门</h1>
+  <div class="en">Efficient LLM serving basics I: intro to LLMs</div>
+  <p class="lead">一个 LLM 请求的生命周期（分词→调度→预填充→解码→流式输出）；Transformer 块、注意力与 GQA、MoE，以及滑动窗口、MLA、线性注意力、扩散 LM 等新变体。</p>
+  <div class="readings"><b>推荐阅读</b><a href="https://arxiv.org/abs/1706.03762" target="_blank" rel="noopener">Transformer</a><a href="https://arxiv.org/abs/2407.21783" target="_blank" rel="noopener">Llama 3</a><a href="https://arxiv.org/abs/2401.04088" target="_blank" rel="noopener">Mixtral</a><a href="https://cs2680.com/readings/oct-19.html" target="_blank" rel="noopener">更多阅读 →</a></div>
+  <div class="meta">共 36 页 · 原版 PDF：<a href="../../9_llm_serving_basics_1.pdf">9_llm_serving_basics_1.pdf</a> · 键盘 ←/→ 或 J/K 翻页</div>
+</div><section class="slide" id="s1">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/9_llm_serving_basics_1/p01.jpg" alt="原版第 1 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">1 / 36</div>
+    <h2>现代 AI 系统：智能体与系统优化</h2>
+    <p>Juncheng Yang</p>
+<p>LLM 推理服务基础 I：LLM 入门</p>
+  </div>
+</section><section class="slide" id="s2">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/9_llm_serving_basics_1/p02.jpg" alt="原版第 2 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">2 / 36</div>
+    <h2>事务安排</h2>
+    <ul><li>作业 3 周二晚 11:59 截止<ul><li>排行榜提交<strong>不能用迟交日</strong></li><li>请到网站上查看需要提交哪些内容</li></ul></li><li>项目海报展示第二个时段：12 月 2 日 1–3pm<ul><li>只有在 12 月 7 日无法参加时才报名</li><li>报名已于上周日截止；如果想在 12 月 2 日展示，请尽快发邮件给我们</li></ul></li></ul>
+  </div>
+</section><section class="slide" id="s3">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/9_llm_serving_basics_1/p03.jpg" alt="原版第 3 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">3 / 36</div>
+    <h2>今天的安排</h2>
+    <ul><li>LLM 入门<ul><li>一个 LLM 请求的生命周期</li><li>Transformer 架构 [1]</li><li>稠密模型、MoE 及高级变体</li></ul></li><li>面向 LLM 推理服务的 GPU 入门 [2]<ul><li>GPU 基础</li><li>GPU 架构</li><li>GPU 编程与近期的 kernel 进展</li></ul></li></ul>
+<div class="callout">[1] 本讲假设传统的自注意力 Transformer 架构<br>[2] 不深入细节，目标是帮你建立直觉</div>
+  </div>
+</section><section class="slide" id="s4">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/9_llm_serving_basics_1/p04.jpg" alt="原版第 4 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">4 / 36</div>
+    <h2>一个 LLM 请求的生命周期</h2>
+    <p>从提示词到流式输出文本的六个阶段：</p>
+<p>分词（Tokenize）→ 调度（Schedule）→ 预填充（Prefill）→ 解码（Decode）→ 反分词（Detokenize）→ 流式输出（Stream），后几个阶段对每个输出 token 重复</p>
+<ul><li><strong>预填充 → 首 token 延迟（TTFT）</strong>：整个提示词在一次前向传播中完成</li><li><strong>解码 → 每秒 token 数</strong>：每个输出 token 一次前向传播</li></ul>
+  </div>
+</section><section class="slide" id="s5">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/9_llm_serving_basics_1/p05.jpg" alt="原版第 5 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">5 / 36</div>
+    <h2>阶段 1：分词</h2>
+    <ul><li>文本被切分成 token，而不是单词</li><li>大约每 3–4 个字符一个 token</li><li>token 数量决定成本和内存</li><li>不同模型的分词器不同</li></ul>
+<p>示例：“Serving is hard” → <code>Serv</code> <code>ing</code> <code>is</code> <code>hard</code>（ID 如 1841、2653……）——4 个 token，而不是 3 个单词</p>
+<div class="callout">字节级 BPE：从 256 个字节值出发，反复把最频繁的相邻对合并成新 token。不存在未知 token。</div>
+  </div>
+</section><section class="slide" id="s6">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/9_llm_serving_basics_1/p06.jpg" alt="原版第 6 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">6 / 36</div>
+    <h2>阶段 2：调度与批处理</h2>
+    <ul><li>请求独立到达；GPU 喜欢批量处理</li><li>调度器决定每一步由谁运行</li><li>连续批处理：请求可以在中途加入或离开</li><li>准入受 KV cache 内存限制</li></ul>
+<p class="note">（图：第 t 步运行 R1、R2、R3，空一个位；第 t+1 步 R2 完成离开，R4 加入；第 t+2 步 R5 加入）</p>
+<div class="callout">完成的请求离开，新的请求加入——无需等凑满一整批。</div>
+  </div>
+</section><section class="slide" id="s7">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/9_llm_serving_basics_1/p07.jpg" alt="原版第 7 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">7 / 36</div>
+    <h2>阶段 3：预填充</h2>
+    <ul><li>整个提示词一次性运行</li><li>所有提示词 token 并行地做注意力</li><li>计算密集型；成本随长度增长</li><li>生成 KV cache，输出第 1 个 token</li></ul>
+<p class="note">（图：提示词 token t1…t6 → 对所有 token 一次前向传播 → 第一个输出 token）</p>
+<div class="callout">计算密集 → 决定首 token 延迟</div>
+  </div>
+</section><section class="slide" id="s8">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/9_llm_serving_basics_1/p08.jpg" alt="原版第 8 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">8 / 36</div>
+    <h2>阶段 4：解码生成 logits；采样选出下一个 token</h2>
+    <p><strong>阶段 4 · 解码</strong></p>
+<ul><li>每个新 token 一次前向传播</li><li>缓存每步增长一个 token</li><li>带宽密集型，所以要批处理</li><li>缓存满了 → 抢占或排队</li></ul>
+<p><strong>阶段 5 · 采样</strong></p>
+<ul><li><strong>Temperature（温度）</strong> <code>temperature = 0</code>：0 时总是取最高分 token，&gt;1 时更多 token 有机会被选中</li><li><strong>Top-k</strong> <code>top_k = 50</code>：从最可能的 k 个中采样；k 固定</li><li><strong>Top-p（核采样）</strong> <code>top_p = 0.9</code>：取概率之和达到 p 的最少 token；会随置信度自适应</li></ul>
+<div class="callout">同一个模型、同一个提示词：这些设置会改变答案，也会改变运行时长。</div>
+  </div>
+</section><section class="slide" id="s9">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/9_llm_serving_basics_1/p09.jpg" alt="原版第 9 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">9 / 36</div>
+    <h2>阶段 5：反分词与流式输出</h2>
+    <ul><li>token ID 一生成就转换成文本</li><li>不完整的字符会被缓冲</li><li>流式输出让交互成为可能</li><li>提前停止可释放缓存内存</li></ul>
+<p>用户逐 token 看到的内容：The → The model → The model streams → The model streams tokens</p>
+<div class="callout">停止 token、长度上限或连接断开都会结束流。</div>
+  </div>
+</section><section class="slide" id="s10">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/9_llm_serving_basics_1/p10.jpg" alt="原版第 10 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">10 / 36</div>
+    <h2>生命周期：要点总结</h2>
+    <ol><li><strong>分词</strong>：把文本转成 token ID；词表越大，token 越少，但 embedding 表越大</li><li><strong>调度</strong>：连续批处理让请求每一步都可以加入和离开；KV cache 内存限制准入</li><li><strong>预填充</strong>：整个提示词在一次计算密集的前向中运行，生成 KV cache 和第一个 token</li><li><strong>解码与采样</strong>：每个 token 一次访存密集的前向；采样从 logits 中选出每个 token</li><li><strong>反分词与流式输出</strong>：把每个 token ID 转为文本，生成即发送</li></ol>
+  </div>
+</section><section class="slide" id="s11">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/9_llm_serving_basics_1/p11.jpg" alt="原版第 11 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">11 / 36</div>
+    <h2>窥探模型内部</h2>
+    
+  </div>
+</section><section class="slide" id="s12">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/9_llm_serving_basics_1/p12.jpg" alt="原版第 12 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">12 / 36</div>
+    <h2>符号约定</h2>
+    <p><strong>模型形状</strong></p>
+<div class="tbl"><table><thead><tr><th>符号</th><th>含义</th><th>Llama 3 70B</th></tr></thead><tbody><tr><td>d</td><td>模型宽度</td><td>8,192</td></tr><tr><td>L</td><td>层数</td><td>80</td></tr><tr><td>H</td><td>query 头数</td><td>64</td></tr><tr><td>H_kv</td><td>key/value 头数</td><td>8</td></tr><tr><td>d_k</td><td>头维度，d ÷ H</td><td>128</td></tr><tr><td>d_ff</td><td>MLP 隐藏层宽度</td><td>28,672</td></tr><tr><td>V</td><td>词表大小</td><td>128,256</td></tr></tbody></table></div>
+<p><strong>负载与内存</strong></p>
+<div class="tbl"><table><thead><tr><th>符号</th><th>含义</th><th>Llama 3 70B</th></tr></thead><tbody><tr><td>n</td><td>序列中的 token 数</td><td>例如 20,000</td></tr><tr><td>B</td><td>并发请求数</td><td>例如 16</td></tr><tr><td>N</td><td>参数量</td><td>70.6B</td></tr><tr><td>W</td><td>权重字节数（BF16）</td><td>141 GB</td></tr><tr><td>KV</td><td>每 token 的 KV 字节数</td><td>320 KB</td></tr></tbody></table></div>
+<div class="callout">KV = 2 × L × H_kv × d_k × 2 B；Kᵀ 表示 K 的转置</div>
+<p>（Meta, The Llama 3 Herd of Models, 2024）</p>
+  </div>
+</section><section class="slide" id="s13">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/9_llm_serving_basics_1/p13.jpg" alt="原版第 13 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">13 / 36</div>
+    <h2>LLM 是一摞相同的 Transformer 块</h2>
+    <ul><li><strong>输入</strong>：文本以整数 token ID 的形式进入</li><li><strong>Embedding</strong>：每个 ID 变成一个向量（8,192 维）</li><li><strong>Transformer 块 × L</strong>：Llama 3 70B 有 L = 80 个块，每块都有归一化 + 残差<ul><li><strong>自注意力</strong>：在 token 之间混合信息</li><li><strong>前馈网络（FFN）</strong>：对每个 token 单独做变换</li></ul></li><li><strong>LM head</strong>：为词表中每个 token 打一个分</li><li><strong>Softmax</strong>：分数变成概率 → 下一个 token 的概率</li></ul>
+  </div>
+</section><section class="slide" id="s14">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/9_llm_serving_basics_1/p14.jpg" alt="原版第 14 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">14 / 36</div>
+    <h2>每个块在残差流上加上注意力和 MLP，各自前面都有 RMSNorm</h2>
+    <div class="callout">h = x + Attn(RMSNorm(x))<br>y = h + FFN(RMSNorm(h))<br>RMSNorm(x) = x / √( (1/d) Σᵢ xᵢ² + ε ) ⊙ g</div>
+<ul><li><strong>RMSNorm</strong>：按均方根缩放；每个维度一个可学习的增益 g</li><li><strong>Pre-norm（前置归一化）</strong>：对每个子层的输入做归一化，使深层堆叠训练稳定</li><li><strong>残差流</strong>：x 流经全部 80 个块；每个子层只是加上一个更新量</li></ul>
+<p>（Zhang &amp; Sennrich, RMSNorm, NeurIPS 2019；Xiong et al., ICML 2020；Meta, Llama 3, 2024）</p>
+  </div>
+</section><section class="slide" id="s15">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/9_llm_serving_basics_1/p15.jpg" alt="原版第 15 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">15 / 36</div>
+    <h2>自注意力让每个 token 读取它之前的所有 token</h2>
+    <ul><li>每个 token 发出一个 query、一个 key 和一个 value</li><li>query · key 的分数决定从每个 token 读取多少</li><li>因果掩码遮住未来的 token</li><li>n 个 token → n² 个分数：成本随上下文增长</li></ul>
+<div class="callout">softmax(QKᵀ / √d_k) · V</div>
+<p class="note">（图：“The cat sat on the”的注意力矩阵，某一行权重 0.1 / 0.2 / 0.5 / 0.2，和为 1；对角线以上被遮蔽）</p>
+<p><strong>为什么要除以 √d_k？</strong> q · k 是 d_k 个乘积之和，会随 d_k 增大；缩放可防止 softmax 饱和。</p>
+<p>（Vaswani et al., Attention Is All You Need, NeurIPS 2017）</p>
+  </div>
+</section><section class="slide" id="s16">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/9_llm_serving_basics_1/p16.jpg" alt="原版第 16 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">16 / 36</div>
+    <h2>每个 token 是 X 的一行；权重矩阵把它变成 Q、K、V</h2>
+    <p>X（n × d）× W_Q（d × d_k）= Q（n × d_k）</p>
+<ul><li>Q = X W_Q：每个 token 在找什么</li><li>K = X W_K：每个 token 能提供什么</li><li>V = X W_V：每个 token 传递什么</li></ul>
+<p><strong>变量</strong></p>
+<ul><li>n：到目前为止的 token 数（提示词 + 输出）</li><li>d：每个 token 向量的维数（8,192）</li><li>d_k：单个头中 query 或 key 的维数（128）</li><li>W_Q、W_K、W_V：可学习权重，每个头各一个 d × d_k 矩阵</li><li>head：一个注意力单元；64 个并行运行</li></ul>
+  </div>
+</section><section class="slide" id="s17">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/9_llm_serving_basics_1/p17.jpg" alt="原版第 17 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">17 / 36</div>
+    <h2>QKᵀ 给每对 token 打分；softmax 把每行变成权重</h2>
+    <p>Q（n × d_k）× Kᵀ（d_k × n）= S（n × n）→ ÷ √d_k，加上 M，做 softmax → A（n × n）× V（n × d_v）= O（n × d_v）</p>
+<p><strong>以一行为例</strong>：A 的第 4 行表示 token 4 从 token 1 到 4 分别取多少，这一行之和为 1。</p>
+<p><strong>变量</strong></p>
+<ul><li>Kᵀ：转置后的 key，每列是一个 token</li><li>S：分数，第 i 行第 j 列 = query i · key j</li><li>M：掩码，对角线以上为 −∞，遮住未来 token</li><li>A：权重，每行之和为 1</li><li>d_v：value 向量维度（128）</li><li>O：输出，每行是 V 各行的加权混合</li></ul>
+  </div>
+</section><section class="slide" id="s18">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/9_llm_serving_basics_1/p18.jpg" alt="原版第 18 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">18 / 36</div>
+    <h2>注意力的计算复杂度是 O(n²)</h2>
+    <div class="tbl"><table><thead><tr><th>步骤</th><th>公式</th><th>形状</th></tr></thead><tbody><tr><td>输入</td><td>X</td><td>n × d</td></tr><tr><td>Query</td><td>Q = X W_Q</td><td>n × d_k</td></tr><tr><td>分数</td><td>S = QKᵀ / √d_k</td><td>n × n</td></tr><tr><td>权重</td><td>A = softmax(S + M)</td><td>n × n</td></tr><tr><td>输出</td><td>O = A V</td><td>n × d_v</td></tr></tbody></table></div>
+<p><strong>每层 FLOPs</strong>：QKᵀ：2n²d；AV：2n²d；合计 ≈ 4n²d</p>
+<p><strong>如果把 S 存下来需要的内存</strong>：n² × 头数 × 层数 × 2 B = 8,192² × 64 × 80 × 2 B ≈ 690 GB</p>
+<div class="callout">FlashAttention 按 tile 逐块计算 softmax，从不存储 S。</div>
+<p>（Vaswani et al., NeurIPS 2017；Dao et al., FlashAttention, NeurIPS 2022）</p>
+  </div>
+</section><section class="slide" id="s19">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/9_llm_serving_basics_1/p19.jpg" alt="原版第 19 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">19 / 36</div>
+    <h2>多头注意力并行运行 64 个小注意力，再用 W_O 混合</h2>
+    <div class="callout">headᵢ = softmax(QᵢKᵢᵀ / √d_k + M) Vᵢ<br>MHA(X) = Concat(head₁, …, head_H) W_O</div>
+<ul><li><strong>拆分</strong>：Q、K、V 拆成 H = 64 个头，每个 d_k = 8,192 ÷ 64 = 128</li><li><strong>注意</strong>：每个头在自己的 128 维上做带掩码的 softmax 注意力</li><li><strong>混合</strong>：W_O 把各个头融合成一个向量</li></ul>
+<div class="callout">FLOPs 与一个宽头相同：64 × 128 = 8,192。拆分改变的是学到的东西，而不是成本。</div>
+  </div>
+</section><section class="slide" id="s20">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/9_llm_serving_basics_1/p20.jpg" alt="原版第 20 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">20 / 36</div>
+    <h2>每个头用自己的 128 维做注意力，因此各头学到不同的模式</h2>
+    <ul><li>输入 X：n × 8,192</li><li>投影：head 1 … head 64，各有 Q K V（128 维）</li><li>注意（5 个 token 示意）：head 1 关注前一个 token；head 2 关注第一个 token；head 3 关注邻近 token；head 64 关注整个上下文；……还有 60 个头</li><li>输出：各 head 为 n × 128 → 拼接为 n × 8,192 → × W_O → n × 8,192</li></ul>
+  </div>
+</section><section class="slide" id="s21">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/9_llm_serving_basics_1/p21.jpg" alt="原版第 21 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">21 / 36</div>
+    <h2>共享 key/value 头可以缩小 KV cache</h2>
+    <ul><li><strong>多头（MHA）</strong>：8 个 query 头、8 个 KV 头 → KV cache 1×</li><li><strong>分组查询（GQA）</strong>：8 个 query 头、2 个 KV 头 → KV cache ¼×</li><li><strong>多查询（MQA）</strong>：8 个 query 头、1 个 KV 头 → KV cache ⅛×</li></ul>
+<div class="callout">每 token 的 KV cache = 2 × L × H_kv × d_k × 每个值的字节数<br>Llama 3 70B：64 个 query 头共享 8 个 KV 头，KV cache 比 MHA 小 8 倍<br>= 2 × 80 × 8 × 128 × 2 B = 每 token 320 KB，而 MHA 为 2.5 MB</div>
+<p>（Ainslie et al., GQA, EMNLP 2023；Shazeer, MQA, 2019）</p>
+  </div>
+</section><section class="slide" id="s22">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/9_llm_serving_basics_1/p22.jpg" alt="原版第 22 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">22 / 36</div>
+    <h2>以 Llama 3 70B 为例</h2>
+    <ul><li>d = 8,192：token 向量的宽度</li><li>h = 64，d_h = 128：64 个 Q 头 × 128 = 8,192</li><li>h_kv = 8：共享 8 个 KV 头</li><li>d_ff = 28,672：FFN 隐藏层宽度，3.5 × d</li><li>L = 80：串联的 Transformer 块数</li><li>V = 128,256：词表中的 token 数</li></ul>
+<p class="note">（图：一个 token = 8,192 个数 → 注意力（KV 1…KV 8）→ 8,192 → FFN 28,672 个隐藏单元 → 8,192 → … 共 80 层 → 128,256 个分数，词表中每个 token 一个）</p>
+  </div>
+</section><section class="slide" id="s23">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/9_llm_serving_basics_1/p23.jpg" alt="原版第 23 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">23 / 36</div>
+    <h2>Llama 3 70B：参数都在哪里</h2>
+    <div class="tbl"><table><thead><tr><th>组件</th><th>公式</th><th>参数量</th></tr></thead><tbody><tr><td>注意力 / 每层</td><td>2d · H · d_k + 2d · H_kv · d_k</td><td>151M</td></tr><tr><td>FFN / 每层</td><td>3 · d · d_ff</td><td>705M</td></tr><tr><td>所有层</td><td>80 × 856M</td><td>68.5B</td></tr><tr><td>Embedding + LM head</td><td>2 · V · d</td><td>2.1B</td></tr><tr><td>合计</td><td></td><td>70.6B</td></tr></tbody></table></div>
+  </div>
+</section><section class="slide" id="s24">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/9_llm_serving_basics_1/p24.jpg" alt="原版第 24 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">24 / 36</div>
+    <h2>系统直觉：权重、计算量和 KV cache 决定了预填充、解码与内存</h2>
+    <ul><li><strong>权重</strong>：2 B × 参数量 = 141 GB</li><li><strong>计算量</strong>：≈ 2 × 参数量 = 每 token 141 GFLOPs</li><li><strong>KV cache</strong>：2 × L × H_kv × d_k × 2 B = 每 token 320 KB</li></ul>
+<p>Llama 3 70B，BF16，运行在 2× H200 上：1,978 TFLOP/s、9.6 TB/s、282 GB；n = 80,000 token，B = 请求数</p>
+<div class="tbl"><table><thead><tr><th>量</th><th>公式</th><th>1 个请求</th><th>64 个请求</th></tr></thead><tbody><tr><td>预填充（80K token）</td><td>B · (2N·n + 2L·d·n²) ÷ FLOP/s</td><td>9.95 s</td><td>637 s</td></tr><tr><td>所需显存</td><td>W + B·n·KV</td><td>167 GB</td><td>1,779 GB</td></tr></tbody></table></div>
+<div class="callout">如何支持更长的序列？</div>
+<p>（Meta, The Llama 3 Herd of Models, 2024；NVIDIA, H200 datasheet, 2024）</p>
+  </div>
+</section><section class="slide" id="s25">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/9_llm_serving_basics_1/p25.jpg" alt="原版第 25 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">25 / 36</div>
+    <h2>MoE 把每个块的 FFN 替换为一个路由器和一组更小的专家 FFN</h2>
+    <ul><li><strong>稠密块</strong>：注意力 → FFN（一个大 MLP，每个 token 都要完整运行）</li><li><strong>MoE 块</strong>：注意力 → 路由器选出 top-2 → E0…E7 共 8 个更小的 FFN，每个 token 只运行其中 2 个 → 加权求和</li></ul>
+<p>（Shazeer et al., MoE, ICLR 2017；Jiang et al., Mixtral of Experts, 2024）</p>
+  </div>
+</section><section class="slide" id="s26">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/9_llm_serving_basics_1/p26.jpg" alt="原版第 26 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">26 / 36</div>
+    <h2>稠密 vs MoE：内存随总参数量增长，计算随激活参数量增长</h2>
+    <div class="tbl"><table><thead><tr><th>模型</th><th>专家</th><th>总参数</th><th>每 token 激活</th><th>权重（BF16）</th><th>每 token GFLOPs</th></tr></thead><tbody><tr><td>Llama 2 70B</td><td>全部（稠密）</td><td>69B</td><td>69B</td><td>138 GB</td><td>138</td></tr><tr><td>Mixtral 8x7B</td><td>8 选 2</td><td>46.7B</td><td>12.9B</td><td>93 GB</td><td>26</td></tr><tr><td>Llama 3.1 405B</td><td>全部（稠密）</td><td>405B</td><td>405B</td><td>810 GB</td><td>810</td></tr><tr><td>DeepSeek-V3</td><td>257 选 9</td><td>671B</td><td>37B</td><td>1,342 GB</td><td>74</td></tr></tbody></table></div>
+<div class="callout">同等质量，更少计算：Mixtral 以约 1/5 的 FLOPs 追平 Llama 2 70B；DeepSeek-V3 以约 1/11 的 FLOPs 比肩 Llama 3.1 405B，但需要 1.7 倍的内存。</div>
+<p>（GFLOPs ≈ 2 × 激活参数量。Jiang et al. 2024；DeepSeek-AI 2024；Touvron et al. 2023；Llama Team 2024）</p>
+  </div>
+</section><section class="slide" id="s27">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/9_llm_serving_basics_1/p27.jpg" alt="原版第 27 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">27 / 36</div>
+    <h2>高级 LLM 变体</h2>
+    <ul><li>滑动窗口注意力</li><li>多头潜在注意力（Multi-Latent Attention, MLA）</li><li>线性注意力</li><li>状态空间模型</li><li>稀疏注意力</li><li>循环 Transformer（Looped transformers）</li><li>多 token 预测</li><li>扩散语言模型</li></ul>
+<div class="callout">ADVANCED——略读，或自行深入</div>
+  </div>
+</section><section class="slide" id="s28">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/9_llm_serving_basics_1/p28.jpg" alt="原版第 28 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">28 / 36</div>
+    <h2>滑动窗口层限制 KV cache 大小；少量全局层保留长程回忆</h2>
+    <ul><li><strong>完整因果注意力</strong>：最后一个 token 读取全部，KV 随 n 增长</li><li><strong>滑动窗口，w = 3</strong>：最后一个 token 只读 3 个，KV 上限为 w 个 token</li></ul>
+<p><strong>层的排布</strong></p>
+<ul><li>Gemma 3：5 个局部层（w = 1,024）对 1 个全局层，循环重复</li><li>Mistral 7B：每层都是局部，w = 4,096</li><li>Gemma 2：1 个局部层（w = 4,096）与 1 个全局层交替</li></ul>
+<div class="callout">推理服务效果：在 128K 上下文下，Gemma 3 存储的 KV 比全部用全局层少约 6 倍。<br>ADVANCED——略读，或自行深入</div>
+  </div>
+</section><section class="slide" id="s29">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/9_llm_serving_basics_1/p29.jpg" alt="原版第 29 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">29 / 36</div>
+    <h2>MLA 为每个 token 只存一个压缩后的潜向量</h2>
+    <p>token h → 压缩 → 潜向量 c（缓存）→ 展开为 K、V</p>
+<ul><li><strong>存摘要，重建细节</strong>：注意力需要时，K 和 V 从 c 重新计算</li><li><strong>多一点计算，少很多内存</strong>：解码时，上投影被折叠进 query 和输出权重中</li><li>MHA 为每个头缓存 K 和 V；MLA 只缓存一个潜向量 c（虚线部分由 c 重建，从不存储）</li></ul>
+<div class="callout">推理服务效果：相比 DeepSeek 67B，DeepSeek-V2 的 KV cache 减少 93%，生成吞吐提升 5.8 倍。<br>ADVANCED——略读，或自行深入</div>
+  </div>
+</section><section class="slide" id="s30">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/9_llm_serving_basics_1/p30.jpg" alt="原版第 30 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">30 / 36</div>
+    <h2>线性注意力层保持固定大小的状态，而不是不断增长的 KV cache</h2>
+    <ul><li><strong>Softmax 注意力</strong>：KV cache 每个 token 多一项，永远增长</li><li><strong>线性注意力</strong>：状态 S_t 为 d_k × d_v，每一步大小不变，原地更新</li><li><strong>朴素线性注意力</strong>：每个 token 把它的 key × value 加到状态上；query 读取状态</li><li><strong>Gated DeltaNet</strong>：先让旧状态衰减，再覆写新 key 所指向的内容<ul><li>α_t：衰减门——遗忘多少</li><li>β_t：写入门——覆写得多用力</li></ul></li><li><strong>Qwen3-Next：48 层</strong> = 36 个 Gated DeltaNet + 12 个注意力层（GDN, GDN, GDN, Attn）×12；只有那 12 层保留 KV cache</li><li>同样的 3:1 配方：Kimi Linear、Qwen3.5</li></ul>
+<div class="callout">推理服务效果：4 层中有 3 层在任意上下文长度下，每个请求只保存一个固定大小的状态。<br>ADVANCED——略读，或自行深入</div>
+  </div>
+</section><section class="slide" id="s31">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/9_llm_serving_basics_1/p31.jpg" alt="原版第 31 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">31 / 36</div>
+    <h2>状态空间模型同样保持固定大小的状态</h2>
+    <div class="tbl"><table><thead><tr><th></th><th>门控线性注意力</th><th>状态空间（Mamba）</th></tr></thead><tbody><tr><td>更新</td><td>S ← α S + β v kᵀ</td><td>h ← Ā h + B̄ x</td></tr><tr><td>状态</td><td>一个 d_k × d_v 的键值矩阵 S</td><td>每个通道一个小向量 h</td></tr><tr><td>每个 token</td><td>把 value × key（按 β 缩放）加到 S</td><td>先用 Ā 衰减 h，再加上 B̄ × token x</td></tr><tr><td>遗忘</td><td>门 α：由 token 决定 S 衰减多少</td><td>Ā：由 token 决定 h 衰减多少</td></tr><tr><td>渊源</td><td>去掉 softmax 的注意力</td><td>信号处理和 RNN</td></tr></tbody></table></div>
+<ul><li><strong>选择性</strong>：Ā 和 B̄ 依赖于每个 token，所以该层能选择保留什么</li><li><strong>固定状态</strong>：每个通道保存一个小状态 h，解码内存不随 n 增长</li><li><strong>硬件感知的扫描</strong>：并行扫描把状态保持在 SRAM 中；Mamba-2 将其转化为矩阵乘</li></ul>
+<div class="callout">推理服务效果：没有不断增长的 KV cache；Mamba 报告生成吞吐最高可达 Transformer 的 5 倍。<br>ADVANCED——略读，或自行深入</div>
+  </div>
+</section><section class="slide" id="s32">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/9_llm_serving_basics_1/p32.jpg" alt="原版第 32 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">32 / 36</div>
+    <h2>稀疏注意力：每个 query 只读取前 2,048 个最相关的历史 token</h2>
+    <ol><li><strong>打分</strong>：I_{t,s} = Σⱼ w_{t,j} · ReLU(q_{t,j} · k_s)</li><li><strong>选择</strong>：S_t = I_{t,s} 中的 top-k</li><li><strong>注意</strong>：o_t = Attn(q_t, {c_s : s ∈ S_t})</li><li>索引器：头数少、FP8、每个 token 一个 128 维的 key</li><li>主注意力：只看 2,048 个 token，而不是全部 n 个</li></ol>
+<p class="note">（图示为 16 个 token 中取 k = 4；DeepSeek-V3.2 取 k = 2,048；深红色为被选中的 top-k）</p>
+<div class="callout">推理服务效果：每个 token 的工作量上限为 2,048 次读取，但所有 token 的 KV 仍需存储。<br>ADVANCED——略读，或自行深入</div>
+  </div>
+</section><section class="slide" id="s33">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/9_llm_serving_basics_1/p33.jpg" alt="原版第 33 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">33 / 36</div>
+    <h2>循环 Transformer：同一个块重复使用多次，深度消耗的是计算而不是权重</h2>
+    <p>输入 → 前奏 P → 块 R × K → 尾声 C → 输出（每次循环使用相同权重）</p>
+<ul><li><strong>共享权重</strong>：一个块 R 被应用 K 次，额外的深度不增加参数</li><li><strong>测试时的深度</strong>：一个 3.5B 的循环深度模型，随 K 增大在推理任务上表现更好</li><li><strong>系统权衡</strong>：权重保持很小，但每次循环是串行的：延迟随 K 增长</li></ul>
+<div class="callout">不增加参数的计算：K 次循环的成本是该块 FLOPs 的 K 倍，且没有额外的权重内存。<br>ADVANCED——略读，或自行深入</div>
+  </div>
+</section><section class="slide" id="s34">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/9_llm_serving_basics_1/p34.jpg" alt="原版第 34 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">34 / 36</div>
+    <h2>扩散语言模型：通过几步并行细化来填充被遮蔽的 token</h2>
+    <ul><li>第 0 步：[M] [M] [M] [M] [M] [M]</li><li>第 1 步：[M] read [M] weight [M] [M]</li><li>第 2 步：GPUs read [M] weight [M] step</li><li>第 3 步：GPUs read every weight each step</li></ul>
+<p>（深红色边框 = 本步填入）</p>
+<ul><li><strong>LLaDA（2025）</strong>：8B 掩码扩散模型，在 2.3T token 上从零训练；与 Llama 3 8B 相当</li><li><strong>Dream 7B（2025）</strong>：从 Qwen2.5 7B 权重出发；网络本身仍是 Transformer</li></ul>
+<div class="callout">推理服务效果：一次前向能填充许多 token，但步数越少质量越差。<br>ADVANCED——略读，或自行深入</div>
+  </div>
+</section><section class="slide" id="s35">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/9_llm_serving_basics_1/p35.jpg" alt="原版第 35 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">35 / 36</div>
+    <h2>下节课</h2>
+    
+  </div>
+</section><section class="slide" id="s36">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/9_llm_serving_basics_1/p36.jpg" alt="原版第 36 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">36 / 36</div>
+    <h2>选读材料</h2>
+    
+  </div>
+</section><nav class="pager"><a href="8_agent_design_5.html">← L08 高级智能体设计 I：成本与性能</a><a href="10_llm_serving_basics_2a.html">L10 高效 LLM 推理服务基础 II：GPU 入门 →</a></nav></main>
+</div>
+<div class="lightbox" hidden><img alt=""></div>
+<script src="../assets/app.js"></script>
+</body>
+</html>

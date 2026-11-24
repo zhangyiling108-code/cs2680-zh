@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L11 GPU 编程（续） · CS2680</title>
+<link rel="stylesheet" href="../assets/style.css">
+
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">CS2680 <span>现代 AI 系统</span></a>
+  <nav class="lecnav"><a href="../lectures/1_intro.html">L01</a><a href="../lectures/2_agent_use_1.html">L02</a><a href="../lectures/3_agent_use_2.html">L03</a><a href="../lectures/4_agent_design_1.html">L04</a><a href="../lectures/5_agent_design_2.html">L05</a><a href="../lectures/6_agent_design_3.html">L06</a><a href="../lectures/7_agent_design_4.html">L07</a><a href="../lectures/8_agent_design_5.html">L08</a><a href="../lectures/9_llm_serving_basics_1.html">L09</a><a href="../lectures/10_llm_serving_basics_2a.html">L10</a><a class="on" href="../lectures/10_llm_serving_basics_2b.html">L11</a><a href="../lectures/11_llm_serving_basics_3.html">L12</a><a href="../lectures/12_llm_serving_spec_decoding.html">L13</a><a href="../lectures/8_assignment3.html">A3</a></nav>
+  <div class="tools">
+    <div class="seg" role="group" aria-label="显示模式">
+      <button data-mode="both" title="原图 + 中文">对照</button>
+      <button data-mode="zh" title="只看中文">中文</button>
+      <button data-mode="img" title="只看原版">原版</button>
+    </div>
+    <button class="theme" title="切换深浅色" aria-label="切换深浅色">◐</button>
+  </div>
+</header>
+<div class="layout">
+  <aside class="toc"><div class="toc-h">本讲目录</div><ol><li><a href="#s1"><b>1</b>现代 AI 系统：智能体与系统优化</a></li><li><a href="#s2"><b>2</b>事务安排</a></li><li><a href="#s3"><b>3</b>今天的安排</a></li><li><a href="#s4"><b>4</b>GPU 编程</a></li><li><a href="#s5"><b>5</b>GPU 代码是异步执行的</a></li><li><a href="#s6"><b>6</b>kernel 是为单个线程编写的（SIMT）</a></li><li><a href="#s7"><b>7</b>每个线程的 ID 决定它负责哪个数组元素</a></li><li><a href="#s8"><b>8</b>线程块以 32 线程为一个 warp 在 SM 上运行</a></li><li><a href="#s9"><b>9</b>图编译器（torch.compile）：你写模型，编译器写 kernel</a></li><li><a href="#s10"><b>10</b>Tile 语言：描述整个块的工作，而不是单个线程</a></li><li><a href="#s11"><b>11</b>Triton：每个 program 处理一个数据 tile</a></li><li><a href="#s12"><b>12</b>TileLang：你把每个 tile 放进共享内存，编译器负责映射线程</a></li><li><a href="#s13"><b>13</b>CuTe、CUTLASS 与 ThunderKittens：由你选择布局、异步拷贝和 warp 角色</a></li><li><a href="#s14"><b>14</b>不同的抽象层级</a></li><li><a href="#s15"><b>15</b>每个 GPU 程序最终都编译成 SASS</a></li><li><a href="#s16"><b>16</b>GPU 效率与利用率</a></li><li><a href="#s17"><b>17</b>推理中的 MFU：模型 FLOPs 利用率</a></li><li><a href="#s18"><b>18</b>MFU 偏低的四个原因</a></li><li><a href="#s19"><b>19</b>MBU：解码效率看的是每秒搬运的字节数，而不是 FLOPs</a></li><li><a href="#s20"><b>20</b>先剖析时间线，再剖析 kernel</a></li><li><a href="#s21"><b>21</b>GPU 利用率</a></li><li><a href="#s22"><b>22</b>读懂计数器：找出哪个单元在忙</a></li><li><a href="#s23"><b>23</b>GPU 效率：要点总结</a></li><li><a href="#s24"><b>24</b>GPU kernel 优化的近期进展</a></li><li><a href="#s25"><b>25</b>kernel 在三个地方浪费 GPU 时间</a></li><li><a href="#s26"><b>26</b>kernel 融合</a></li><li><a href="#s27"><b>27</b>FlashAttention：逐 tile 计算注意力，让 S 永远不落到 HBM</a></li><li><a href="#s28"><b>28</b>从 FlashAttention 到 FlashAttention-4</a></li><li><a href="#s29"><b>29</b>持久化 kernel：每个 SM 一个线程块，循环处理多个 tile</a></li><li><a href="#s30"><b>30</b>Split-KV：在 SM 之间平衡解码负载</a></li><li><a href="#s31"><b>31</b>CUDA Graphs：把启动过程录制一次，一次调用全部重放</a></li><li><a href="#s32"><b>32</b>编程式依赖启动（PDL）：提前启动下一个 kernel</a></li><li><a href="#s33"><b>33</b>Megakernel：一次启动跑完整个模型</a></li><li><a href="#s34"><b>34</b>融合的集合通信：掩盖张量并行的通信</a></li><li><a href="#s35"><b>35</b>MoE 的 all-to-all 隐藏在计算之后</a></li><li><a href="#s36"><b>36</b>智能体成为新的编译器</a></li><li><a href="#s37"><b>37</b>kernel 进展：要点总结</a></li><li><a href="#s38"><b>38</b>AI 硬件的挑战</a></li><li><a href="#s39"><b>39</b>下节课</a></li><li><a href="#s40"><b>40</b>选读材料</a></li><li><a href="#s41"><b>41</b>优化 GPU 代码：在一个 kernel 中组合的四个目标</a></li><li><a href="#s42"><b>42</b>优化内存流量：搬运更少字节，每个字节多复用几次</a></li><li><a href="#s43"><b>43</b>掩盖等待、暴露并行：让每个 SM 持续发射工作</a></li><li><a href="#s44"><b>44</b>更便宜的计算：同样的数学，用更快的指令</a></li></ol></aside>
+  <main><div class="hero">
+  <div class="kicker">第二部分 · 面向 LLM 与智能体的系统 · 第 10 周 · 2026-11-02</div>
+  <h1>GPU 编程（续）</h1>
+  <div class="en">GPU programming (cont.)</div>
+  <p class="lead">GPU 编程模型与 Triton / TileLang / CUTLASS 等抽象层级；用 MFU、MBU 和剖析工具衡量效率；kernel 融合、FlashAttention、持久化 kernel、CUDA Graphs、Megakernel 等近期进展。</p>
+  
+  <div class="meta">共 44 页 · 原版 PDF：<a href="../../10_llm_serving_basics_2b.pdf">10_llm_serving_basics_2b.pdf</a> · 键盘 ←/→ 或 J/K 翻页</div>
+</div><section class="slide" id="s1">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/10_llm_serving_basics_2b/p01.jpg" alt="原版第 1 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">1 / 44</div>
+    <h2>现代 AI 系统：智能体与系统优化</h2>
+    <p>Juncheng Yang</p>
+<p>LLM 推理服务基础 II：GPU 入门（续：GPU 编程）</p>
+  </div>
+</section><section class="slide" id="s2">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/10_llm_serving_basics_2b/p02.jpg" alt="原版第 2 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">2 / 44</div>
+    <h2>事务安排</h2>
+    <ul><li>作业 4 今天发布，两周半后截止<ul><li>目标：分析性能与瓶颈并迭代改进，理解真实负载与合成基准有何不同</li><li>报告很重要，你只需要写少量代码</li><li>排行榜提交<strong>不能用迟交日</strong>。<strong>不要</strong>同时占用超过一块 GPU</li><li>如果之前系统编程经验不多，会比较难</li></ul></li><li>项目提案下周三（10 月 28 日）截止<ul><li>格式和页数不限</li><li><strong>不要</strong>上传 AI 生成的内容</li></ul></li></ul>
+  </div>
+</section><section class="slide" id="s3">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/10_llm_serving_basics_2b/p03.jpg" alt="原版第 3 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">3 / 44</div>
+    <h2>今天的安排</h2>
+    <ul><li>面向 LLM 推理服务的 GPU 入门 [1]<ul><li>GPU 基础</li><li>GPU 架构</li><li>GPU 编程与近期的 kernel 进展</li></ul></li></ul>
+<div class="callout">[1] 不深入细节，目标是帮你建立直觉</div>
+  </div>
+</section><section class="slide" id="s4">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/10_llm_serving_basics_2b/p04.jpg" alt="原版第 4 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">4 / 44</div>
+    <h2>GPU 编程</h2>
+    
+  </div>
+</section><section class="slide" id="s5">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/10_llm_serving_basics_2b/p05.jpg" alt="原版第 5 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">5 / 44</div>
+    <h2>GPU 代码是异步执行的</h2>
+    <ul><li><strong>主机（Host）</strong>：CPU + DRAM，运行 main()</li><li><strong>设备（Device）</strong>：GPU + HBM，运行 kernel</li><li>两者之间是 PCIe Gen5 x16：约 64 GB/s，比 HBM 慢 75 倍</li></ul>
+<p>（时间线：CPU 线程 cudaMalloc → memcpy H→D → launch → 做其他 CPU 工作 → memcpy 拷回（等待）；拷贝引擎拷入 a、b，拷出 c；SM 上运行 vec_add kernel）</p>
+<ul><li><strong>启动是异步的</strong>：CPU 不会等 GPU kernel 执行完</li><li><strong>错误暴露得晚</strong>：kernel 的故障会在下一次同步调用时才显现</li></ul>
+  </div>
+</section><section class="slide" id="s6">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/10_llm_serving_basics_2b/p06.jpg" alt="原版第 6 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">6 / 44</div>
+    <h2>kernel 是为单个线程编写的（SIMT）</h2>
+    <pre><code>// one thread computes one output element
+__global__ void add(float* x, float* y,
+                    float* out, int n) {
+  int i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i &lt; n) out[i] = x[i] + y[i];
+}
+// launch: n = 1M elements
+int threads = 256;
+int blocks  = (n + threads - 1) / threads;
+add&lt;&lt;&lt;blocks, threads&gt;&gt;&gt;(x, y, out, n);</code></pre>
+<ul><li><strong>全局索引</strong>：每个线程根据块 ID 和线程 ID 找到自己的元素</li><li><strong>4,096 个块</strong>：1M ÷ 256 个线程；GPU 把它们分散到 132 个 SM 上</li><li><strong>块大小取 32 的倍数</strong>：通常 128–256 个线程；warp 由线性 tid 划分</li></ul>
+<div class="tbl"><table><thead><tr><th>限定符</th><th>运行于</th><th>调用自</th></tr></thead><tbody><tr><td><code>__global__</code></td><td>设备</td><td>主机</td></tr><tr><td><code>__device__</code></td><td>设备</td><td>设备</td></tr><tr><td><code>__host__ __device__</code></td><td>两者皆可</td><td>两者皆可</td></tr></tbody></table></div>
+  </div>
+</section><section class="slide" id="s7">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/10_llm_serving_basics_2b/p07.jpg" alt="原版第 7 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">7 / 44</div>
+    <h2>每个线程的 ID 决定它负责哪个数组元素</h2>
+    <ul><li><strong>启动</strong>：4,096 个块 × 256 个线程（Block 0、Block 1、Block 2……Block 4,095）</li><li><strong>每个线程计算自己的索引</strong>：i（元素）= blockIdx.x（哪个块）× blockDim.x（块大小）+ threadIdx.x（块内位置）</li><li><strong>然后写自己的元素</strong> out[i]：0 … 1,048,575</li></ul>
+  </div>
+</section><section class="slide" id="s8">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/10_llm_serving_basics_2b/p08.jpg" alt="原版第 8 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">8 / 44</div>
+    <h2>线程块以 32 线程为一个 warp 在 SM 上运行</h2>
+    <div class="tbl"><table><thead><tr><th>软件</th><th>硬件</th></tr></thead><tbody><tr><td><strong>Grid</strong>：一次 kernel 启动的所有块</td><td><strong>整块 GPU</strong>：块分散到 132 个 SM 上</td></tr><tr><td><strong>Block</strong>：最多 1,024 个线程，共享内存</td><td><strong>一个 SM</strong>：块一直留在那里直到完成</td></tr><tr><td><strong>Warp</strong>：32 个线程锁步执行</td><td><strong>一个分区</strong>：调度器每周期发射它</td></tr><tr><td><strong>Thread</strong>：自己的寄存器，自己的索引</td><td><strong>一个核心（也叫 lane）</strong>：warp 的 32 条 SIMT 通道之一</td></tr></tbody></table></div>
+  </div>
+</section><section class="slide" id="s9">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/10_llm_serving_basics_2b/p09.jpg" alt="原版第 9 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">9 / 44</div>
+    <h2>图编译器（torch.compile）：你写模型，编译器写 kernel</h2>
+    <pre><code>import torch
+
+def block(x, w, b):
+    h = x @ w + b
+    return gelu(h) * 0.5
+
+# capture the graph, fuse, generate kernels
+fast = torch.compile(block,
+                     mode=&quot;max-autotune&quot;)
+y = fast(x, w, b)  # first call compiles
+
+# JAX: jax.jit(block) lowers to XLA</code></pre>
+<ul><li><strong>你决定</strong>：数学运算本身，用普通的 PyTorch 或 JAX 写。不涉及线程、tile 或内存</li><li><strong>编译器决定</strong>：哪些算子融合、tile 大小，以及生成的 Triton 或 XLA kernel</li><li><strong>失效的情况</strong>：控制流打断了计算图，或者慢的那个算子无法被融合</li></ul>
+  </div>
+</section><section class="slide" id="s10">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/10_llm_serving_basics_2b/p10.jpg" alt="原版第 10 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">10 / 44</div>
+    <h2>Tile 语言：描述整个块的工作，而不是单个线程</h2>
+    <div class="tbl"><table><thead><tr><th></th><th>CUDA C++</th><th>Tile 语言</th></tr></thead><tbody><tr><td>你编写</td><td>一个线程的工作</td><td>一个数据 tile 的工作</td></tr><tr><td>索引</td><td>blockIdx × blockDim + threadIdx</td><td>program_id + 对 tile 的一个范围</td></tr><tr><td>内存暂存、同步</td><td>你自己暂存 tile，调用 <code>__syncthreads()</code></td><td>由编译器暂存和同步</td></tr><tr><td>Tensor Core</td><td>warp 级 MMA 指令</td><td>对整个 tile 做一次点积</td></tr></tbody></table></div>
+<p><strong>常用的 tile 语言</strong></p>
+<ul><li><strong>Triton</strong>：Python；支持 NVIDIA 和 AMD GPU</li><li><strong>Pallas</strong>：面向 TPU 和 GPU 的 JAX kernel</li><li><strong>TileLang</strong>：基于 TVM 的 Python DSL</li><li><strong>ThunderKittens</strong>：C++ tile 模板</li><li><strong>cuTile</strong>：NVIDIA 在 CUDA 中的 tile 模型</li></ul>
+  </div>
+</section><section class="slide" id="s11">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/10_llm_serving_basics_2b/p11.jpg" alt="原版第 11 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">11 / 44</div>
+    <h2>Triton：每个 program 处理一个数据 tile</h2>
+    <pre><code># each program handles one BLOCK
+@triton.jit
+def add(x, y, out, n, BLOCK: tl.constexpr):
+    pid = tl.program_id(0)
+    offs = pid * BLOCK + tl.arange(0, BLOCK)
+    mask = offs &lt; n
+    a = tl.load(x + offs, mask=mask)
+    b = tl.load(y + offs, mask=mask)
+    tl.store(out + offs, a + b, mask=mask)
+# launch: one program per tile
+grid = (triton.cdiv(n, 1024),)
+add[grid](x, y, out, n, BLOCK=1024)</code></pre>
+<ul><li><strong>每个 tile 一个 program</strong>：一个 program = 一个 CUDA 线程块；它负责 BLOCK 个元素</li><li><strong>其余交给编译器</strong>：合并访存、共享内存暂存，以及通过 <code>tl.dot</code> 调用 Tensor Core MMA</li><li><strong>自动调优选择 tile</strong>：<code>@triton.autotune</code> 针对每种形状尝试不同的 BLOCK 大小和 warp 数</li></ul>
+<div class="callout">ADVANCED——略读，或自行深入</div>
+  </div>
+</section><section class="slide" id="s12">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/10_llm_serving_basics_2b/p12.jpg" alt="原版第 12 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">12 / 44</div>
+    <h2>TileLang：你把每个 tile 放进共享内存，编译器负责映射线程</h2>
+    <pre><code>@T.prim_func
+def mm(A, B, C):
+  with T.Kernel(N // bn, M // bm,
+                threads=128) as (bx, by):
+    As = T.alloc_shared((bm, bk), &quot;float16&quot;)
+    Bs = T.alloc_shared((bk, bn), &quot;float16&quot;)
+    Cl = T.alloc_fragment((bm, bn), &quot;float&quot;)
+    T.clear(Cl)
+    for k in T.Pipelined(K // bk, num_stages=3):
+      T.copy(A[by * bm, k * bk], As)
+      T.copy(B[k * bk, bx * bn], Bs)
+      T.gemm(As, Bs, Cl)
+    T.copy(Cl, C[by * bm, bx * bn])</code></pre>
+<ul><li><strong>你决定</strong>：tile 形状、放在共享内存还是寄存器、流水线级数（提前加载几个 tile）</li><li><strong>TileLang 决定</strong>：线程映射、拷贝指令、swizzle 和 MMA 调用</li><li><strong>适用于</strong>：需要显式暂存的 GEMM 和注意力变体</li></ul>
+<div class="callout">ADVANCED——略读，或自行深入</div>
+  </div>
+</section><section class="slide" id="s13">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/10_llm_serving_basics_2b/p13.jpg" alt="原版第 13 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">13 / 44</div>
+    <h2>CuTe、CUTLASS 与 ThunderKittens：由你选择布局、异步拷贝和 warp 角色</h2>
+    <pre><code># a layout maps a coordinate to an offset
+row = cute.make_layout((8, 4), stride=(4, 1))
+col = cute.make_layout((8, 4), stride=(1, 8))
+
+# (i, j) -&gt; i*4 + j  versus  i + j*8
+
+# the same algebra describes:
+#  thread -&gt; data in a warp
+#  swizzled shared-memory tiles
+#  TMA boxes and MMA fragments</code></pre>
+<p>（同一套布局代数可以描述：warp 中线程到数据的映射、swizzle 后的共享内存 tile、TMA box 与 MMA fragment）</p>
+<ul><li><strong>你决定</strong>：布局、TMA 与异步流水线，以及哪些 warp 负责加载、哪些负责计算</li><li><strong>库提供</strong>：针对每代 GPU 经过测试的拷贝、MMA 和流水线构件</li><li><strong>适用于</strong>：让 GEMM 和注意力冲刺到峰值的最后一段</li></ul>
+<div class="callout">ADVANCED——略读，或自行深入</div>
+  </div>
+</section><section class="slide" id="s14">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/10_llm_serving_basics_2b/p14.jpg" alt="原版第 14 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">14 / 44</div>
+    <h2>不同的抽象层级</h2>
+    <div class="tbl"><table><thead><tr><th>层级</th><th>何时使用</th><th>代价</th></tr></thead><tbody><tr><td>图编译器：torch.compile、XLA</td><td>整个模型的默认选择</td><td>对慢算子几乎没有话语权</td></tr><tr><td>Tile 语言：Helion、Triton、Pallas</td><td>某个算子没被融合或缺失</td><td>几小时；可跨 GPU 移植</td></tr><tr><td>显式 tile：TileLang</td><td>需要控制暂存</td><td>几天</td></tr><tr><td>布局、warp 角色：CuTe、CUTLASS、ThunderKittens</td><td>GEMM 或注意力必须达到峰值</td><td>几周；每代 GPU 都要重做</td></tr><tr><td>线程：CUDA C++</td><td>不规则的工作：排序、稀疏、图</td><td>一切都靠你自己</td></tr></tbody></table></div>
+<div class="callout">ADVANCED——略读，或自行深入（本页为前几页内容的综合）</div>
+  </div>
+</section><section class="slide" id="s15">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/10_llm_serving_basics_2b/p15.jpg" alt="原版第 15 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">15 / 44</div>
+    <h2>每个 GPU 程序最终都编译成 SASS</h2>
+    <ul><li><strong>NVCC</strong>：设备代码 → NVVM → PTX → ptxas → SASS → fatbinary（SASS + PTX）；主机代码 → GCC / Clang / MSVC → 主机目标文件 → 链接器 → 可执行文件 + fatbin</li><li><strong>Triton</strong>：<code>@triton.jit</code> → Triton IR → TritonGPU IR → LLVM IR → LLVM → PTX → ptxas → SASS（cubin）</li><li><strong>CUDA Tile</strong>：cuTile Python、C++ → CUDA Tile IR → tileiras → SASS</li><li><strong>加载时</strong>：驱动运行与当前 GPU 匹配的 SASS；若没有，就 JIT 编译 PTX 并缓存</li></ul>
+<p class="note">（图例：源码 / 中间代码 / 虚拟 ISA / 机器码 / 工具）</p>
+<div class="callout">ADVANCED——略读，或自行深入</div>
+  </div>
+</section><section class="slide" id="s16">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/10_llm_serving_basics_2b/p16.jpg" alt="原版第 16 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">16 / 44</div>
+    <h2>GPU 效率与利用率</h2>
+    
+  </div>
+</section><section class="slide" id="s17">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/10_llm_serving_basics_2b/p17.jpg" alt="原版第 17 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">17 / 44</div>
+    <h2>推理中的 MFU：模型 FLOPs 利用率</h2>
+    <p><strong>模型 FLOPs 利用率</strong></p>
+<ul><li>MFU = 实际达到的模型 FLOP/s ÷ 峰值 FLOP/s</li><li>模型 FLOPs：每个生成 token 约 2N，只算前向</li><li>峰值：GPU 的稠密 Tensor Core 速率</li></ul>
+<p><strong>8 块 H100 上的 Llama 2 70B</strong></p>
+<ul><li>每 token 模型 FLOPs：2 × 70B ≈ 140 GFLOP</li><li>每块 GPU 实际达到：3,040 tok/s × 140 GFLOP ≈ 426 TFLOP/s</li><li>MFU：426 ÷ 1,979 TFLOP/s ≈ 22%</li></ul>
+<div class="callout">经验值：训练 35–45%；推理预填充 40–60%，解码 10–40%</div>
+  </div>
+</section><section class="slide" id="s18">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/10_llm_serving_basics_2b/p18.jpg" alt="原版第 18 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">18 / 44</div>
+    <h2>MFU 偏低的四个原因</h2>
+    <ul><li><strong>通信</strong>：张量、流水线和数据并行的传输没有被计算掩盖</li><li><strong>流水线气泡</strong>：每个批次填充和排空流水线时，各阶段处于空闲</li><li><strong>内存受限的 kernel</strong>：归一化、softmax 和优化器更新以带宽速度运行，而不是 Tensor Core 峰值</li><li><strong>重计算（训练）</strong>：激活检查点会重跑前向计算，而 MFU 不计入这部分</li></ul>
+<div class="callout">MFU 把硬件能力和软件成熟度区分开来。</div>
+<p>（Chowdhery et al., PaLM, JMLR 2023；Korthikanti et al., Activation Recomputation, MLSys 2023）</p>
+  </div>
+</section><section class="slide" id="s19">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/10_llm_serving_basics_2b/p19.jpg" alt="原版第 19 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">19 / 44</div>
+    <h2>MBU：解码效率看的是每秒搬运的字节数，而不是 FLOPs</h2>
+    <p><strong>模型带宽利用率</strong></p>
+<ul><li>MBU = 实际达到的字节/秒 ÷ HBM 峰值带宽</li><li>每个解码步的字节数：全部权重 + 读取的 KV cache</li></ul>
+<p><strong>H200 上的 Llama 3 8B，BF16，batch 1</strong></p>
+<ul><li>每个 token 读取 16 GB</li><li>在 200 tok/s 时：3.2 TB/s ÷ 4.8 TB/s ≈ 67%</li></ul>
+<div class="callout">经验法则：预填充和训练报告 MFU，解码报告 MBU。</div>
+<p><strong>推理服务系统的其他度量</strong></p>
+<ul><li><strong>每 GPU 每秒 token 数</strong>：在给定延迟目标下的吞吐，例如 p50 每输出 token 耗时</li><li><strong>每 token 能耗</strong>：焦耳 = 平均板卡功耗 ÷ tokens/s</li><li><strong>每百万 token 成本</strong>：每 GPU 小时美元 ÷ (tokens/s × 3,600) × 10⁶</li></ul>
+<p>（Databricks, LLM Inference Performance Engineering, 2023）</p>
+  </div>
+</section><section class="slide" id="s20">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/10_llm_serving_basics_2b/p20.jpg" alt="原版第 20 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">20 / 44</div>
+    <h2>先剖析时间线，再剖析 kernel</h2>
+    <p><strong>Nsight Systems（nsys）</strong>：<code>nsys profile -o run ./app</code></p>
+<ul><li>展示：CPU 线程、CUDA API 调用、拷贝、kernel 和流的统一时间线</li><li>发现：空闲间隙、被串行化的流、启动开销</li></ul>
+<p><strong>Nsight Compute（ncu）</strong>：<code>ncu --set full -k vec_add ./app</code></p>
+<ul><li>展示：对每个 kernel 重放以采集计数器——光速分析（speed of light）、内存流量、warp 停顿、热点代码行</li><li>发现：某个 kernel 为什么慢。重放时间仅供对比</li></ul>
+<p><strong>流程</strong>：nsys 找到慢的区域 → ncu 解释某个 kernel → 只改一处 → 重新测量</p>
+<div class="callout">直觉：先扫一遍全身（时间线）看时间花在哪里，再放大（kernel）看为什么。</div>
+  </div>
+</section><section class="slide" id="s21">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/10_llm_serving_basics_2b/p21.jpg" alt="原版第 21 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">21 / 44</div>
+    <h2>GPU 利用率</h2>
+    <div class="tbl"><table><thead><tr><th>计数器</th><th>测量什么</th></tr></thead><tbody><tr><td>nvidia-smi 利用率</td><td>至少有一个 kernel 在运行的时间占比</td></tr><tr><td>SM active</td><td>有 warp 驻留的 SM 周期占比</td></tr><tr><td>SM occupancy</td><td>驻留 warp 数 ÷ 最大 warp 数，所有 SM 合计</td></tr><tr><td>Tensor pipe active</td><td>Tensor Core 忙碌的周期占比</td></tr><tr><td>DRAM active</td><td>HBM 正在搬运数据的周期占比</td></tr></tbody></table></div>
+<p><code>dcgmi dmon -e 203,1002,1003,1004,1005</code>：每列对应上面的一个计数器</p>
+  </div>
+</section><section class="slide" id="s22">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/10_llm_serving_basics_2b/p22.jpg" alt="原版第 22 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">22 / 44</div>
+    <h2>读懂计数器：找出哪个单元在忙</h2>
+    <ol><li><strong>GPU 忙吗？</strong> nvidia-smi 显示 100%<ul><li>否 → <strong>kernel 之间 GPU 空闲</strong>：CPU 启动开销或数据加载。下一步：看 Nsight Systems 时间线；使用 CUDA Graphs</li></ul></li><li><strong>SM 忙吗？</strong> SM active 高<ul><li>否 → <strong>线程块太少</strong>：工作量填不满所有 SM。下一步：加大 batch，每个 kernel 更多块</li></ul></li><li><strong>哪个单元在忙？</strong> 比较 DRAM active 与 Tensor pipe active<ul><li>DRAM active 高 → 内存受限 → 用 MBU 评判</li><li>Tensor pipe active 高 → 计算受限 → 用 MFU 评判</li><li>两者都低 → 延迟受限 → 用 Nsight Compute 分析</li></ul></li></ol>
+  </div>
+</section><section class="slide" id="s23">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/10_llm_serving_basics_2b/p23.jpg" alt="原版第 23 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">23 / 44</div>
+    <h2>GPU 效率：要点总结</h2>
+    <ol><li><strong>MFU</strong>：实际模型 FLOP/s ÷ 稠密峰值；用它评判预填充和训练</li><li><strong>MFU 偏低</strong>：通信、流水线气泡、内存受限的 kernel 和重计算吃掉了峰值</li><li><strong>MBU</strong>：实际字节/秒 ÷ HBM 峰值带宽；用它评判解码</li><li><strong>计数器</strong>：nvidia-smi 显示 100% 只说明有 kernel 在跑；要看 SM、Tensor 和 DRAM 的活跃度</li></ol>
+  </div>
+</section><section class="slide" id="s24">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/10_llm_serving_basics_2b/p24.jpg" alt="原版第 24 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">24 / 44</div>
+    <h2>GPU kernel 优化的近期进展</h2>
+    
+  </div>
+</section><section class="slide" id="s25">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/10_llm_serving_basics_2b/p25.jpg" alt="原版第 25 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">25 / 44</div>
+    <h2>kernel 在三个地方浪费 GPU 时间</h2>
+    <ol><li><strong>kernel 内部</strong>——浪费：Tensor Core 在等加载、softmax 和 exp。进展：FlashAttention、warp 特化、FlashAttention-4</li><li><strong>SM 之间</strong>——浪费：SM 在不均匀的轮次中以及 kernel 启动之间闲置。进展：持久化 kernel、split-KV、CUDA Graphs、PDL、megakernel</li><li><strong>GPU 之间</strong>——浪费：GPU 互相等待对方的数据。进展：融合的集合通信、MoE all-to-all 重叠</li><li><strong>编写 kernel</strong>——浪费的是工程师的时间：每一代新 GPU 都需要重新手工调优 kernel。进展：能编写和测试 kernel 的智能体</li></ol>
+  </div>
+</section><section class="slide" id="s26">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/10_llm_serving_basics_2b/p26.jpg" alt="原版第 26 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">26 / 44</div>
+    <h2>kernel 融合</h2>
+    <p>纵向：把步骤串起来；横向：把并行的算子合并</p>
+<p><strong>纵向融合</strong>：生产者在同一个 kernel 内直接喂给消费者</p>
+<ul><li>GEMM → + bias → GELU，一个 kernel：每个结果都留在寄存器中</li><li>节省：HBM 往返</li><li>例：GEMM 尾处理（epilogue）、LayerNorm、带掩码的 softmax</li></ul>
+<p><strong>横向融合</strong>：共享同一输入的算子合并成一个 kernel</p>
+<ul><li>x · W_q、x · W_k、x · W_v → x · [W_q W_k W_v]：一个 GEMM，x 只读一次，只启动一次</li><li>节省：启动次数和对 x 的重复读取</li><li>例：QKV 投影、FFN 的 gate + up</li></ul>
+<div class="callout">编译器两者都做：torch.compile 把纵向链条融合成一个 Triton kernel；模型代码常常手工融合 QKV 以及 gate + up 的权重（把它们拼接起来）。</div>
+<p><strong>示例</strong>：在 1 GB 的 FP32 数据上做缩放、加偏置、ReLU</p>
+<ul><li>不融合：三个 kernel，每一步都经过 HBM（读 x、写 t、读 t、写 u、读 u、写 y）——1.25 ms</li><li>融合：读 x、写 y——0.42 ms，HBM 流量减少 3 倍</li></ul>
+  </div>
+</section><section class="slide" id="s27">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/10_llm_serving_basics_2b/p27.jpg" alt="原版第 27 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">27 / 44</div>
+    <h2>FlashAttention：逐 tile 计算注意力，让 S 永远不落到 HBM</h2>
+    <p><strong>问题</strong></p>
+<ul><li>标准注意力把 n × n 的分数矩阵 S 及其 softmax P 写入 HBM，再读回来</li><li>在 8K token 时，每层每个头就是 6,700 万个分数，全部要经过 HBM</li></ul>
+<p><strong>解决方案</strong>（全部在片上：一个块的共享内存和寄存器中）</p>
+<ul><li>Q tile × K₁V₁、K₂V₂、K₃V₃…… → S tile = Q·Kᵀ → softmax · V（维护运行中的最大值和求和）→ O tile</li><li>对每个 K、V tile 重复：S 和 P 从不离开芯片</li><li>HBM：K、V 只读一次，O 只写一次</li></ul>
+<p>（Dao et al., FlashAttention, NeurIPS 2022；Dao, FlashAttention-2, ICLR 2024）</p>
+  </div>
+</section><section class="slide" id="s28">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/10_llm_serving_basics_2b/p28.jpg" alt="原版第 28 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">28 / 44</div>
+    <h2>从 FlashAttention 到 FlashAttention-4</h2>
+    <div class="tbl"><table><thead><tr><th>版本</th><th>瓶颈</th><th>修复</th><th>效果</th></tr></thead><tbody><tr><td>FlashAttention · 2022 · A100</td><td>HBM 流量：n × n 分数矩阵被写出又读回</td><td>在共享内存中对 Q、K、V 分块；在线 softmax</td><td>注意力快 2–4 倍；内存随长度线性增长</td></tr><tr><td>FlashAttention-2 · 2023 · A100</td><td>占用率低：每个头一个块，非矩阵乘 FLOPs 多</td><td>沿序列拆分工作；减少重缩放</td><td>约为 FA1 的 2 倍；最高可达 A100 峰值的 ~70%</td></tr><tr><td>FlashAttention-3 · 2024 · H100</td><td>warp 加载和计算 softmax 时 Tensor Core 在等待</td><td>TMA + warp 特化；softmax 与 GEMM 重叠；FP8</td><td>FP16 下约达 H100 峰值的 75%</td></tr><tr><td>FlashAttention-4 · 2025 · B200</td><td>Tensor Core 翻倍了，exp 单元没有：softmax 成为瓶颈</td><td>TMEM 累加器；一部分 exp 放到 FMA 单元上计算</td><td>在 B200 上比 cuDNN 注意力更快</td></tr></tbody></table></div>
+<div class="callout">ADVANCED——略读，或自行深入</div>
+  </div>
+</section><section class="slide" id="s29">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/10_llm_serving_basics_2b/p29.jpg" alt="原版第 29 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">29 / 44</div>
+    <h2>持久化 kernel：每个 SM 一个线程块，循环处理多个 tile</h2>
+    <p><strong>问题</strong></p>
+<ul><li>一次矩阵乘被切成 160 个输出 tile，每个 tile 一个线程块。GPU 有 132 个 SM，所以这些块要分两轮运行</li><li>第二轮只有 28 个块：104 个 SM 在等待。每个块还要为单个 tile 重做一遍准备工作</li></ul>
+<p><strong>解决方案</strong></p>
+<ul><li>普通启动：每 tile 一个块，分轮运行——第 1 轮 132 个块占满 132 个 SM；第 2 轮只有 28 个，104 个 SM 空闲</li><li>持久化 kernel：132 个块常驻，逐个领取 tile（计算 tile 0 → 写出 tile 0 → 计算 tile 1……，计算与写出交错进行）</li><li>Stream-K：把 tile 切成更小的片段，让所有 SM 同时完成</li></ul>
+<div class="callout">要点：每个 SM 启动一个块，让它循环处理 tile——没有空闲的轮次，准备工作也只做一次。CUTLASS 和 DeepGEMM 都这样做。<br>ADVANCED——略读，或自行深入</div>
+  </div>
+</section><section class="slide" id="s30">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/10_llm_serving_basics_2b/p30.jpg" alt="原版第 30 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">30 / 44</div>
+    <h2>Split-KV：在 SM 之间平衡解码负载</h2>
+    <p><strong>问题</strong></p>
+<ul><li>解码时每个请求只有一个 query token，所以只按 batch × 头数拆分会让 SM 闲置</li><li>不同请求的 KV 长度可相差 100 倍，而它们的页面散落在 HBM 各处</li></ul>
+<p><strong>解决方案</strong></p>
+<ul><li>每个请求的 KV 页（R1、R2、R3）→ Split-KV：每个 SM 处理 4 页（SM0–SM3）→ 按请求合并部分结果 (m, ℓ, O)，方式与在线 softmax 相同</li><li>分页 KV 被视为块稀疏的行</li><li>固定的 grid：可以安全地放进 CUDA Graph</li></ul>
+<div class="callout">要点：FlashInfer（MLSys 2025 杰出论文）把块稀疏 KV、JIT 特化的 kernel 和这个调度器结合在一起；vLLM 和 SGLang 都在使用。<br>ADVANCED——略读，或自行深入</div>
+  </div>
+</section><section class="slide" id="s31">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/10_llm_serving_basics_2b/p31.jpg" alt="原版第 31 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">31 / 44</div>
+    <h2>CUDA Graphs：把启动过程录制一次，一次调用全部重放</h2>
+    <p><strong>问题</strong></p>
+<ul><li>解码一个 token 要运行几十个小 kernel</li><li>每次启动要花几微秒的 CPU 和驱动时间，所以 GPU 在 kernel 之间等待</li></ul>
+<p><strong>解决方案</strong></p>
+<ul><li>普通流：每个 kernel 一次 CPU 启动，GPU 上有间隙</li><li>CUDA Graph：一次调用重放全部——没有间隙，更早完成</li></ul>
+<pre><code>cudaStreamBeginCapture(s, mode);   // record one step
+  …launch the kernels…;  cudaStreamEndCapture(s, &amp;g);
+cudaGraphInstantiate(&amp;e, g, 0);  cudaGraphLaunch(e, s);</code></pre>
+<div class="callout">要点：把一个解码步捕获一次，每个 token 都重放它；vLLM 和 SGLang 都这样做。<br>ADVANCED——略读，或自行深入</div>
+  </div>
+</section><section class="slide" id="s32">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/10_llm_serving_basics_2b/p32.jpg" alt="原版第 32 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">32 / 44</div>
+    <h2>编程式依赖启动（PDL）：提前启动下一个 kernel</h2>
+    <p><strong>问题</strong></p>
+<ul><li>在一个流中，kernel B 只有在 kernel A 完全排空并刷新内存之后才会启动</li><li>解码时每个 token 要运行许多微秒级 kernel，所以启动延迟、序幕（prologue）和每个 kernel 的尾部会累加起来</li></ul>
+<p><strong>解决方案</strong></p>
+<ul><li>默认流顺序：kernel A → 间隙 → 序幕 → kernel B</li><li>使用 PDL：kernel A 运行时 B 的序幕已经开始，在同步点等待 A 触发</li></ul>
+<pre><code>A: cudaTriggerProgrammaticLaunchCompletion();
+B: cudaGridDependencySynchronize();</code></pre>
+<div class="callout">要点：PDL 需要 Hopper 或更新的架构（SM 9.0）；它能减少解码中每个 kernel 之间的间隙，并且可以在 CUDA Graph 内部使用。<br>ADVANCED——略读，或自行深入</div>
+  </div>
+</section><section class="slide" id="s33">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/10_llm_serving_basics_2b/p33.jpg" alt="原版第 33 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">33 / 44</div>
+    <h2>Megakernel：一次启动跑完整个模型</h2>
+    <p><strong>问题</strong></p>
+<ul><li>Llama-3.2-1B 的 batch-1 解码，每个 token 要跑约 7 个 kernel/层 × 16 层</li><li>每个边界都要先排空 GPU，下一个 kernel 才开始加载权重；vLLM 和 SGLang 只用到 H100 带宽的约 50%</li></ul>
+<p><strong>解决方案</strong></p>
+<ul><li>每个算子一个 kernel：每个启动边界都有气泡（Norm → QKV → Attn → O-proj → FFN）</li><li>Megakernel：在执行当前算子时，就加载下一个算子的权重</li><li>组成：GPU 上的解释器、每 SM 的指令队列、用于权重的分页共享内存、用于依赖关系的全局计数器</li></ul>
+<div class="callout">要点：Hazy Research 的 megakernel 在 batch 1 下达到 H100 带宽的 78%，单用户吞吐约为 SGLang 的 1.5 倍。Mirage MPK 可以自动编译这类任务图。<br>ADVANCED——略读，或自行深入</div>
+  </div>
+</section><section class="slide" id="s34">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/10_llm_serving_basics_2b/p34.jpg" alt="原版第 34 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">34 / 44</div>
+    <h2>融合的集合通信：掩盖张量并行的通信</h2>
+    <p><strong>问题</strong></p>
+<ul><li>张量并行把每一层拆到 8 块 GPU 上，在每个切分后的 GEMM 之前加一次 AllGather、之后加一次 ReduceScatter</li><li>如果作为独立 kernel 运行，GEMM 必须等整个集合通信完成</li></ul>
+<p><strong>解决方案</strong></p>
+<ul><li>独立 kernel：先 GEMM（所有 tile），再 ReduceScatter</li><li>融合：每个 tile 的尾处理直接写到其归属的 GPU 上（计算 t0–t5 与 NVLink 传输 t0–t5 交错进行）</li><li>AllGather + GEMM：某行数据一到，对应的 tile 就开始计算</li><li>通过 NVLink 或 NVSHMEM 对等写入，无需额外 kernel</li></ul>
+<div class="callout">要点：Flux 能掩盖多达 96% 的通信，在 8 块 GPU 上预填充比 vLLM 快最多 1.66 倍，解码快 1.30 倍。<br>ADVANCED——略读，或自行深入</div>
+  </div>
+</section><section class="slide" id="s35">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/10_llm_serving_basics_2b/p35.jpg" alt="原版第 35 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">35 / 44</div>
+    <h2>MoE 的 all-to-all 隐藏在计算之后</h2>
+    <p><strong>问题</strong></p>
+<ul><li>每个 MoE 层都要把每个 token 发给它在其他 GPU 上的 top-8 专家，然后再把输出收集回来</li><li>背靠背运行时，分发（dispatch）和合并（combine）期间 Tensor Core 闲置，而且 NCCL kernel 还会从计算中抢走 SM</li></ul>
+<p><strong>解决方案</strong></p>
+<ul><li>串行：分发 → 专家 GEMM → 合并 → 下一层的注意力</li><li>DeepEP：两个微批次重叠——SM 上交替运行 Attn A / Attn B / Experts A / Experts B，网络上同时进行 Dispatch A / Dispatch B / Combine A / Combine B</li><li>基于 hook 的传输在网卡上运行，不占用 SM</li><li>分发用 FP8，合并用 BF16</li><li>NVLink → RDMA 转发</li></ul>
+<div class="callout">要点：DeepEP 在节点内通过 NVLink 维持约 153 GB/s 的分发速率，跨节点通过 RDMA 约 43 GB/s，接近链路峰值。<br>ADVANCED——略读，或自行深入</div>
+  </div>
+</section><section class="slide" id="s36">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/10_llm_serving_basics_2b/p36.jpg" alt="原版第 36 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">36 / 44</div>
+    <h2>智能体成为新的编译器</h2>
+    <p><strong>问题</strong></p>
+<ul><li>每一代 GPU（TMA、TMEM、FP4）和每一种注意力变体都需要新的手工调优 kernel，而能写的工程师很少</li><li>生成的 kernel 可能靠通过一个薄弱的测试或钻 Harness 的空子而“看起来很快”</li></ul>
+<p><strong>解决方案</strong>（反馈循环）</p>
+<ol><li>智能体编写 kernel（CUDA、Triton、CuTe DSL）</li><li>编译（nvcc、ptxas 报错）</li><li>在多种形状上与 PyTorch 参考实现比对</li><li>剖析：运行时间、Nsight 计数器</li></ol>
+<div class="callout">fast_p：既正确又比 PyTorch 快 p 倍以上的任务占比。静态检查会拒绝存在竞态的调度。<br>ADVANCED——略读，或自行深入</div>
+  </div>
+</section><section class="slide" id="s37">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/10_llm_serving_basics_2b/p37.jpg" alt="原版第 37 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">37 / 44</div>
+    <h2>kernel 进展：要点总结</h2>
+    <ol><li><strong>kernel 内部：喂饱 Tensor Core。</strong> 融合尾处理，在 FP8/FP4 下按块缩放，把 warp 分成生产者和消费者，把工作从最慢的单元上挪走</li><li><strong>SM 之间与启动之间：消除空闲时间。</strong> 持久化 CTA 和 split-KV 平衡 SM 负载；PDL 和 megakernel 填平 kernel 之间的间隙</li><li><strong>GPU 之间：掩盖通信。</strong> 把张量并行的集合通信融合进 GEMM tile，让 MoE 的 all-to-all 与专家计算重叠</li><li><strong>编写 kernel：自动化搜索。</strong> 智能体编写并剖析候选 kernel；在多种形状上的正确性检查决定哪些能留下来</li></ol>
+  </div>
+</section><section class="slide" id="s38">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/10_llm_serving_basics_2b/p38.jpg" alt="原版第 38 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">38 / 44</div>
+    <h2>AI 硬件的挑战</h2>
+    <ul><li><strong>网络——跨节点慢 9 倍</strong>：传递 32K token 的 Llama 3 70B 提示词的 KV cache，400G 网卡需 215 ms，NVLink（H100）只需 24 ms</li><li><strong>可靠性——每 3 小时一次故障</strong>¹：Llama 3 训练中 419 次中断的原因——GPU 故障 30%、HBM3 内存 17%、网络 8%</li><li><strong>功耗——常规机架的 8 倍</strong>²：每机架功耗——GB200 NVL72 120 kW、HGX B200 60 kW、常规机架 15 kW</li><li><strong>冷却与用水</strong>：GB200 NVL72 机架需要液冷²；训练 GPT-3 耗用 70 万升淡水³；预计 2027 年 AI 取水量达 42–66 亿立方米³</li></ul>
+<p>（¹The Llama 3 Herd of Models ²NVIDIA HGX Platform: Data Center Physical Requirements Guide ³Making AI Less “Thirsty”）</p>
+  </div>
+</section><section class="slide" id="s39">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/10_llm_serving_basics_2b/p39.jpg" alt="原版第 39 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">39 / 44</div>
+    <h2>下节课</h2>
+    
+  </div>
+</section><section class="slide" id="s40">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/10_llm_serving_basics_2b/p40.jpg" alt="原版第 40 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">40 / 44</div>
+    <h2>选读材料</h2>
+    <p>优化 GPU 代码</p>
+  </div>
+</section><section class="slide" id="s41">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/10_llm_serving_basics_2b/p41.jpg" alt="原版第 41 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">41 / 44</div>
+    <h2>优化 GPU 代码：在一个 kernel 中组合的四个目标</h2>
+    <ul><li><strong>搬运更少的数据</strong>：每个结果搬运的字节更少——例如合并访存、分块、融合</li><li><strong>掩盖等待时间</strong>：在加载完成期间让各单元保持忙碌——例如异步拷贝、warp 特化</li><li><strong>暴露更多并行</strong>：给每个 SM 足够多的独立工作——例如 split-K、独立的累加器</li><li><strong>使用更快的指令</strong>：同样的数学走更便宜的硬件路径——例如 Tensor Core、更低精度</li></ul>
+<div class="callout">它们可以叠加：一个快速的 GEMM 会合并加载、对 tile 做双缓冲并使用 Tensor Core。</div>
+  </div>
+</section><section class="slide" id="s42">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/10_llm_serving_basics_2b/p42.jpg" alt="原版第 42 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">42 / 44</div>
+    <h2>优化内存流量：搬运更少字节，每个字节多复用几次</h2>
+    <div class="tbl"><table><thead><tr><th>技术</th><th>核心思想</th><th>示例</th></tr></thead><tbody><tr><td>合并访存</td><td>相邻线程读取连续地址</td><td>线程 i 读 x[i]，而不是 x[32·i]</td></tr><tr><td>共享内存分块</td><td>一次加载一块，协作线程共同复用</td><td>矩阵 tile 被许多输出复用</td></tr><tr><td>寄存器分块</td><td>每个线程用寄存器计算多个输出</td><td>每个线程多个累加器</td></tr><tr><td>kernel 融合</td><td>中间结果立即消费，省去 HBM 往返</td><td>矩阵乘 + 偏置 + 激活放在一个 kernel</td></tr><tr><td>填充 / swizzle</td><td>改变共享内存布局以避免 bank 冲突</td><td>转置 tile 从 32×32 改为 32×33</td></tr><tr><td>缓存感知的顺序</td><td>调度相邻的块，让它们复用缓存数据</td><td>把读取相同输入的输出 tile 分在一组</td></tr></tbody></table></div>
+  </div>
+</section><section class="slide" id="s43">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/10_llm_serving_basics_2b/p43.jpg" alt="原版第 43 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">43 / 44</div>
+    <h2>掩盖等待、暴露并行：让每个 SM 持续发射工作</h2>
+    <div class="tbl"><table><thead><tr><th>技术</th><th>核心思想</th><th>示例</th></tr></thead><tbody><tr><td>异步拷贝 + 双缓冲</td><td>计算当前 tile 时加载下一个</td><td>GEMM 中交替使用两个共享内存缓冲区</td></tr><tr><td>指令级并行</td><td>前面的指令在等待时，独立的指令照常发射</td><td>多个累加器，而不是一条依赖链</td></tr><tr><td>warp 特化</td><td>不同 warp 承担不同的流水线角色</td><td>生产者 warp 负责加载；消费者 warp 执行 MMA</td></tr><tr><td>Split-K / 拆分归约</td><td>把一个长归约分给更多工人，再合并</td><td>解码时把长 KV 序列拆到多个块上</td></tr><tr><td>warp 级通信</td><td>在 warp 内寄存器到寄存器地交换数值</td><td>基于 shuffle 的 warp 求和或求最大值</td></tr></tbody></table></div>
+<div class="callout">代价：split-K 增加一个合并步骤；流水线化增加缓冲区和同步。</div>
+  </div>
+</section><section class="slide" id="s44">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/10_llm_serving_basics_2b/p44.jpg" alt="原版第 44 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">44 / 44</div>
+    <h2>更便宜的计算：同样的数学，用更快的指令</h2>
+    <div class="tbl"><table><thead><tr><th>技术</th><th>核心思想</th><th>示例</th></tr></thead><tbody><tr><td>映射到 Tensor Core</td><td>把矩阵运算整理成硬件支持的 tile 和布局</td><td>用 MMA 指令代替标量 FMA</td></tr><tr><td>更低精度</td><td>存储和搬运的字节更少；在支持的地方计算更快</td><td>FP16/BF16 输入，FP32 累加</td></tr><tr><td>循环展开 + 特化</td><td>在编译期固定结构，去掉运行时工作</td><td>为某个头维度或掩码类型专门构建的 kernel</td></tr><tr><td>减少分支发散</td><td>让一个 warp 中的线程走同一条路径</td><td>把控制流相似的任务分在一组</td></tr><tr><td>自动调优</td><td>针对每种负载形状测量不同变体</td><td>搜索 tile 大小、warp 数、流水线深度</td></tr></tbody></table></div>
+<div class="callout">两个独立的选择：Tensor Core 需要合适的形状；精度必须保持准确。</div>
+  </div>
+</section><nav class="pager"><a href="10_llm_serving_basics_2a.html">← L10 高效 LLM 推理服务基础 II：GPU 入门</a><a href="11_llm_serving_basics_3.html">L12 高效 LLM 推理服务基础 III：批处理、分页与并行 →</a></nav></main>
+</div>
+<div class="lightbox" hidden><img alt=""></div>
+<script src="../assets/app.js"></script>
+</body>
+</html>

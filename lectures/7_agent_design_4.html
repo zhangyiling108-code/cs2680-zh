@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L07 智能体设计 IV：智能体评测 · CS2680</title>
+<link rel="stylesheet" href="../assets/style.css">
+
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">CS2680 <span>现代 AI 系统</span></a>
+  <nav class="lecnav"><a href="../lectures/1_intro.html">L01</a><a href="../lectures/2_agent_use_1.html">L02</a><a href="../lectures/3_agent_use_2.html">L03</a><a href="../lectures/4_agent_design_1.html">L04</a><a href="../lectures/5_agent_design_2.html">L05</a><a href="../lectures/6_agent_design_3.html">L06</a><a class="on" href="../lectures/7_agent_design_4.html">L07</a><a href="../lectures/8_agent_design_5.html">L08</a><a href="../lectures/9_llm_serving_basics_1.html">L09</a><a href="../lectures/10_llm_serving_basics_2a.html">L10</a><a href="../lectures/10_llm_serving_basics_2b.html">L11</a><a href="../lectures/11_llm_serving_basics_3.html">L12</a><a href="../lectures/12_llm_serving_spec_decoding.html">L13</a><a href="../lectures/8_assignment3.html">A3</a></nav>
+  <div class="tools">
+    <div class="seg" role="group" aria-label="显示模式">
+      <button data-mode="both" title="原图 + 中文">对照</button>
+      <button data-mode="zh" title="只看中文">中文</button>
+      <button data-mode="img" title="只看原版">原版</button>
+    </div>
+    <button class="theme" title="切换深浅色" aria-label="切换深浅色">◐</button>
+  </div>
+</header>
+<div class="layout">
+  <aside class="toc"><div class="toc-h">本讲目录</div><ol><li><a href="#s1"><b>1</b>现代 AI 系统：智能体与系统优化</a></li><li><a href="#s2"><b>2</b>事务安排</a></li><li><a href="#s3"><b>3</b>事务安排：Claude Code 会话日志</a></li><li><a href="#s4"><b>4</b>今天的安排</a></li><li><a href="#s5"><b>5</b>如何评测一个智能体的能力？</a></li><li><a href="#s6"><b>6</b>评测智能体的不同方式</a></li><li><a href="#s7"><b>7</b>一点历史</a></li><li><a href="#s8"><b>8</b>评测目标</a></li><li><a href="#s9"><b>9</b>评测目标</a></li><li><a href="#s10"><b>10</b>指标</a></li><li><a href="#s11"><b>11</b>基准评测循环</a></li><li><a href="#s12"><b>12</b>GAIA：通用 AI 助手</a></li><li><a href="#s13"><b>13</b>GAIA：助手能否调研并给出正确答案？</a></li><li><a href="#s14"><b>14</b>BFCL：模型的工具接口可靠吗？</a></li><li><a href="#s15"><b>15</b>WebArena：智能体能完成一个网页工作流吗？</a></li><li><a href="#s16"><b>16</b>OSWorld：智能体能操作一台真正的电脑吗？</a></li><li><a href="#s17"><b>17</b>SWE-bench：智能体能修复真实仓库中的 issue 吗？</a></li><li><a href="#s18"><b>18</b>τ-bench：智能体能否与用户交互、遵守政策并修改后端状态？</a></li><li><a href="#s19"><b>19</b>τ-bench 对终态和一致性计分</a></li><li><a href="#s20"><b>20</b>Terminal-Bench：智能体能通过 shell 完成真实任务吗？</a></li><li><a href="#s21"><b>21</b>Terminal-Bench：介于 SWE-bench 与 OSWorld 之间</a></li><li><a href="#s22"><b>22</b>TheAgentCompany：模拟一家公司</a></li><li><a href="#s23"><b>23</b>智能体基准一览</a></li><li><a href="#s24"><b>24</b>智能体评测充满挑战，且仍在演进</a></li><li><a href="#s25"><b>25</b>数据泄漏：四个层面，而不只是训练</a></li><li><a href="#s26"><b>26</b>泄漏可能发生在整个智能体栈中</a></li><li><a href="#s27"><b>27</b>智能体评测的挑战：单一用户轮次</a></li><li><a href="#s28"><b>28</b>智能体评测的挑战：单一用户轮次</a></li><li><a href="#s29"><b>29</b>智能体评测的挑战：单一用户轮次</a></li><li><a href="#s30"><b>30</b>智能体评测的挑战：单一用户轮次</a></li><li><a href="#s31"><b>31</b>智能体评测的挑战：还有更多</a></li><li><a href="#s32"><b>32</b>前沿模型追上来的速度有多快</a></li><li><a href="#s33"><b>33</b>基准很快就会饱和</a></li><li><a href="#s34"><b>34</b>智能体评测仍在演进</a></li><li><a href="#s35"><b>35</b>真实世界的智能体要考虑更多维度</a></li><li><a href="#s36"><b>36</b>下节课</a></li><li><a href="#s37"><b>37</b>（空白页）</a></li></ol></aside>
+  <main><div class="hero">
+  <div class="kicker">第一部分 · LLM 与智能体入门 · 第 5 周 · 2026-09-30</div>
+  <h1>智能体设计 IV：智能体评测</h1>
+  <div class="en">Agent design IV: agent evaluation</div>
+  <p class="lead">如何评测智能体：评测设计、指标、可靠性、成本与基准测试的选择。</p>
+  <div class="readings"><b>推荐阅读</b><a href="https://cs2680.com/notes/agent-evaluation.html" target="_blank" rel="noopener">Agent evaluation and benchmarks（课程笔记）</a></div>
+  <div class="meta">共 37 页 · 原版 PDF：<a href="../../7_agent_design_4.pdf">7_agent_design_4.pdf</a> · 键盘 ←/→ 或 J/K 翻页</div>
+</div><section class="slide" id="s1">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/7_agent_design_4/p01.jpg" alt="原版第 1 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">1 / 37</div>
+    <h2>现代 AI 系统：智能体与系统优化</h2>
+    <p>Juncheng Yang</p>
+<p>智能体设计 IV：评测</p>
+  </div>
+</section><section class="slide" id="s2">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/7_agent_design_4/p02.jpg" alt="原版第 2 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">2 / 37</div>
+    <h2>事务安排</h2>
+    <ul><li>本周四答疑：3:30pm，SEC 4.308</li><li>期末项目海报展示：12 月 7 日 9am–1pm<ul><li>如果时间不合适，请在本周结束前联系我们</li></ul></li><li>作业 2 本周日截止（尽早开始！）</li></ul>
+  </div>
+</section><section class="slide" id="s3">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/7_agent_design_4/p03.jpg" alt="原版第 3 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">3 / 37</div>
+    <h2>事务安排：Claude Code 会话日志</h2>
+    <ul><li>把相关内容全部打包（从作业 2 开始，完整会话日志缺失部分将被扣分）<ul><li>位置：<code>~/.claude/projects/</code>（macOS 和 Linux），<code>C:\Users\&lt;YourUsername&gt;\.claude\projects\</code>（Windows）</li><li>多传一些没关系</li></ul></li><li>使用 AI 不会被扣分，但作业中的某些部分应当是你自己的工作<ul><li>17 位同学用 Claude 帮忙写报告<ul><li>6 位用来润色文字 ☺</li><li>几位先列要点再让 Claude 来写 ☺</li><li>7 位让 Claude 写初稿再自己改（不鼓励），还有几位从别处粘贴（ChatGPT？）</li><li>4 位几乎直接用了 Claude 的输出，2 位的报告里还留着 Claude Code 的 TODO</li></ul></li><li>简短的报告：是写给你自己的反思</li></ul></li><li><strong>不要篡改你的会话日志！</strong> 这将被视为违反学术诚信<ul><li>有三位同学试图抹掉历史记录</li><li>AI 生成的文字很容易识别（即使没有历史记录）</li><li>完美地藏起所有历史，比做作业还难</li></ul></li></ul>
+  </div>
+</section><section class="slide" id="s4">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/7_agent_design_4/p04.jpg" alt="原版第 4 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">4 / 37</div>
+    <h2>今天的安排</h2>
+    <ul><li>智能体评测</li><li>高性价比的智能体</li></ul>
+  </div>
+</section><section class="slide" id="s5">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/7_agent_design_4/p05.jpg" alt="原版第 5 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">5 / 37</div>
+    <h2>如何评测一个智能体的能力？</h2>
+    <ul><li>历史与趋势</li><li>指标</li><li>代表性基准测试</li><li>挑战</li></ul>
+  </div>
+</section><section class="slide" id="s6">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/7_agent_design_4/p06.jpg" alt="原版第 6 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">6 / 37</div>
+    <h2>评测智能体的不同方式</h2>
+    <p><strong>组件级评测</strong>（智能体内部）</p>
+<ul><li>规划：任务分解</li><li>工具使用：发现、选择、参数填写</li><li>记忆：抽取、整合、检索</li><li>错误恢复</li></ul>
+<p><strong>端到端评测</strong></p>
+<ul><li>成功率：任务完成了吗？</li><li>成本：每个任务的花费</li><li>延迟：完成任务所需时间</li></ul>
+  </div>
+</section><section class="slide" id="s7">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/7_agent_design_4/p07.jpg" alt="原版第 7 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">7 / 37</div>
+    <h2>一点历史</h2>
+    <ul><li><strong>2018 年以前</strong>——语言建模、窄任务：Penn Treebank、WikiText、LAMBADA、SQuAD</li><li><strong>2018–2019</strong>——迁移学习、通用自然语言理解：GLUE、SuperGLUE、ARC、HellaSwag、WinoGrande</li><li><strong>2020–2022</strong>——基础模型能力：MMLU、BIG-bench、GSM8K、MATH、HumanEval、TruthfulQA、HELM</li><li><strong>2023–2024</strong>——智能体与工具使用、上下文、多模态：MT-Bench、Chatbot Arena、AlpacaEval、IFEval、LongBench、MMMU、GPQA、AgentBench、WebArena、GAIA、SWE-bench、OSWorld、τ-bench</li><li><strong>2024–2025</strong>——难度、鲁棒性、时效性：MMLU-Pro、LiveBench、LiveCodeBench、MMMU-Pro、FrontierMath、Humanity's Last Exam</li><li><strong>2025–2026</strong>——更大的范围、更不具体的指令、更真实的用例、更新的问题：GDPval、BrowseComp、Terminal-Bench、ARC-AGI-3……</li></ul>
+<p><a href="https://cs2680.com/notes/agent-evaluation" target="_blank" rel="noopener">https://cs2680.com/notes/agent-evaluation</a></p>
+  </div>
+</section><section class="slide" id="s8">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/7_agent_design_4/p08.jpg" alt="原版第 8 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">8 / 37</div>
+    <h2>评测目标</h2>
+    <div class="tbl"><table><thead><tr><th>评测目标</th><th>代表性基准</th><th>成功意味着</th></tr></thead><tbody><tr><td>预测文本</td><td>PTB、WikiText</td><td>给观测到的文本分配高概率</td></tr><tr><td>给出正确答案</td><td>MMLU、GSM8K、GPQA、HLE</td><td>与已知答案匹配</td></tr><tr><td>给出更受偏好的回答</td><td>Arena、AlpacaEval、MT-Bench</td><td>获得人类或模型的好评</td></tr><tr><td>写出能运行的代码</td><td>HumanEval、LiveCodeBench、SWE-bench</td><td>通过可执行的测试</td></tr><tr><td>完成一个交互式任务</td><td>WebArena、OSWorld、τ-bench、Terminal-Bench</td><td>达到要求的环境状态</td></tr></tbody></table></div>
+  </div>
+</section><section class="slide" id="s9">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/7_agent_design_4/p09.jpg" alt="原版第 9 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">9 / 37</div>
+    <h2>评测目标</h2>
+    <p>（同上页，强调最后几行——智能体评测关注的是“完成交互式任务”）</p>
+<div class="tbl"><table><thead><tr><th>评测目标</th><th>代表性基准</th><th>成功意味着</th></tr></thead><tbody><tr><td>预测文本</td><td>PTB、WikiText</td><td>给观测到的文本分配高概率</td></tr><tr><td>给出正确答案</td><td>MMLU、GSM8K、GPQA、HLE</td><td>与已知答案匹配</td></tr><tr><td>给出更受偏好的回答</td><td>Arena、AlpacaEval、MT-Bench</td><td>获得人类或模型的好评</td></tr><tr><td>写出能运行的代码</td><td>HumanEval、LiveCodeBench、SWE-bench</td><td>通过可执行的测试</td></tr><tr><td>完成一个交互式任务</td><td>WebArena、OSWorld、τ-bench、Terminal-Bench</td><td>达到要求的环境状态</td></tr></tbody></table></div>
+  </div>
+</section><section class="slide" id="s10">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/7_agent_design_4/p10.jpg" alt="原版第 10 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">10 / 37</div>
+    <h2>指标</h2>
+    <ul><li><strong>早期基准</strong><ul><li>困惑度（Perplexity）：在留出文本上平均负对数似然的指数（越低越好）</li><li>准确率或 F1 分数</li><li>偏好或胜率</li></ul></li><li><strong>能力</strong><ul><li>Pass@k：k 个解中至少有一个通过</li><li>Pass^k：k 个解全部通过（由 τ-bench 提出）</li></ul></li><li><strong>成本</strong><ul><li>主要是 LLM 成本</li><li>常被忽视的：工具调用及其他（例如 LLM 缓存未命中）</li></ul></li><li><strong>延迟 / 时长</strong><ul><li>不只是 LLM</li></ul></li></ul>
+  </div>
+</section><section class="slide" id="s11">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/7_agent_design_4/p11.jpg" alt="原版第 11 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">11 / 37</div>
+    <h2>基准评测循环</h2>
+    <pre><code>for task in benchmark:
+    environment = reset_to_task_initial_state(task)
+    while not terminated and within_budget:
+        observation = environment.observe()
+        action = agent(task_instruction, observation, history, tools)
+        environment.execute(action)
+
+    score = task_evaluator(
+        agent_final_answer,
+        final_environment_state,
+        trajectory
+    )</code></pre>
+  </div>
+</section><section class="slide" id="s12">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/7_agent_design_4/p12.jpg" alt="原版第 12 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">12 / 37</div>
+    <h2>GAIA：通用 AI 助手</h2>
+    <ul><li>466 个人工编写的问题<ul><li>网页浏览、电子表格、PDF、图片、音频、计算</li></ul></li><li>简短答案：一个数字、字符串或列表，例如 17.4 或 4,381</li><li>没有固定的工具 API<ul><li>每个智能体自带搜索、浏览器、Python、shell</li></ul></li><li>测试的是整个智能体系统，而不仅仅是 LLM</li></ul>
+<p><strong>难度等级</strong></p>
+<ul><li>第 1 级：≤ 5 步，0 或 1 个工具</li><li>第 2 级：5–10 步，多个工具</li><li>第 3 级：任意长，大量工具</li></ul>
+<p class="note">（来源：Mialon et al., GAIA, arXiv 2023）</p>
+  </div>
+</section><section class="slide" id="s13">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/7_agent_design_4/p13.jpg" alt="原版第 13 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">13 / 37</div>
+    <h2>GAIA：助手能否调研并给出正确答案？</h2>
+    <p><strong>示例任务</strong>：附件电子表格中有一份电影列表。找出同时满足两个条件的那部电影，查出它的导演，并报告导演的出生地。</p>
+<p><strong>智能体做了什么</strong>：搜索 → 打开网页 → 下载 PDF → 提取表格 → 运行 Python → 答案 4,381（过程被评测器丢弃，只有答案计分）</p>
+<p><strong>计分</strong>：只对最终答案计分：score = (1/N) Σᵢ 1[ normalize(ŷ) = normalize(y) ]</p>
+<ul><li><strong>衡量</strong>：推理、检索、工具选择与综合，判分干净</li><li><strong>不衡量：动作</strong>——发邮件、订机票、修改数据库、提交表单、更新 issue</li></ul>
+  </div>
+</section><section class="slide" id="s14">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/7_agent_design_4/p14.jpg" alt="原版第 14 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">14 / 37</div>
+    <h2>BFCL：模型的工具接口可靠吗？</h2>
+    <p><strong>提示词</strong>：用户：“帮我订下周一从波士顿到芝加哥最便宜的航班。”</p>
+<p><strong>可用工具</strong>：<code>search_flights(...)</code>、<code>book_flight(flight_id, passenger_id)</code>、<code>get_weather(...)</code></p>
+<p><strong>模型会发出哪些调用？</strong></p>
+<ul><li>✅ 正确：先搜索，挑最便宜的，再预订——<code>search_flights(origin="BOS", destination="CHI", date=...)</code> → <code>book_flight(flight_id=..., passenger_id=...)</code></li><li>❌ 编造 ID：应当询问用户的 passenger_id</li><li>❌ 无关调用：<code>get_weather(...)</code>，订票不需要</li></ul>
+<p><strong>计分</strong>：AST 或执行检查；多轮场景下每一轮都检查状态和回复</p>
+<p>V4 新增：网络搜索、记忆；请看分类得分，而不是综合分</p>
+<p class="note">（来源：Patil et al., Berkeley Function Calling Leaderboard, ICML 2025）</p>
+  </div>
+</section><section class="slide" id="s15">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/7_agent_design_4/p15.jpg" alt="原版第 15 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">15 / 37</div>
+    <h2>WebArena：智能体能完成一个网页工作流吗？</h2>
+    <p><strong>示例任务</strong>：在 GitLab 中创建 issue “Update onboarding documentation”，指派给 Alex，并加上 documentation 标签</p>
+<p><strong>智能体的做法</strong>（灰：观察〔可访问性树〕；青：动作〔点击、输入、停止〕）：可访问性树 → 点击 [Projects] → 可访问性树 → 点击 [project] → 输入 issue 标题 → 点击 [Create issue]，停止……</p>
+<p><strong>任务如何计分</strong>：重置快照 → 轨迹 τ → 最终状态 s_T（被检查）→ 功能性检查 → 成功 1 / 0</p>
+<ul><li><strong>812 个任务</strong>：自托管的购物、后台管理、Reddit、GitLab、地图、Wikipedia</li><li><strong>文本观察</strong>：可访问性树；对元素 ID 点击或输入</li><li><strong>issue 类任务检查</strong>：issue 存在，且指派人和标签正确</li><li><strong>其他任务检查</strong>：最终 URL、页面内容、后端状态、文本答案</li><li><strong>WebArena-Verified</strong>：结构化输出；去掉 LLM 评判，改为对 HTTP 轨迹做确定性检查</li></ul>
+<p class="note">（来源：Zhou et al., WebArena, ICLR 2024；WebArena-Verified, ServiceNow, 2025）</p>
+  </div>
+</section><section class="slide" id="s16">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/7_agent_design_4/p16.jpg" alt="原版第 16 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">16 / 37</div>
+    <h2>OSWorld：智能体能操作一台真正的电脑吗？</h2>
+    <p><strong>示例任务</strong>：添加一个计算列、排序、另存为 result.xlsx</p>
+<p><strong>智能体的做法</strong>（灰：观察〔像素〕；青：动作〔鼠标、键盘〕）：截图 → 点击 LibreOffice → 截图 → 点击单元格 → 输入公式 → 保存文件……</p>
+<p><strong>任务如何计分</strong>：初始化逻辑 → 轨迹 τ（不计分）→ 最终状态 s_T（被检查）→ 评估函数 f → 奖励 R</p>
+<ul><li><strong>369 个任务</strong>：浏览器、办公软件、文件、系统应用</li><li><strong>跨应用</strong>：工作流横跨多个应用</li><li><strong>像素观察</strong>：屏幕截图</li><li><strong>电子表格</strong>：单元格、公式、文件位置</li><li><strong>其他检查</strong>：设置、文件、应用配置</li></ul>
+<div class="callout">OSWorld 2.0（2026）：108 个长工作流（往往超过 1 小时）、数百步，约 27 个检查点用于部分给分</div>
+<p class="note">（来源：Xie et al., OSWorld, NeurIPS 2024；os-world.github.io）</p>
+  </div>
+</section><section class="slide" id="s17">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/7_agent_design_4/p17.jpg" alt="原版第 17 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">17 / 37</div>
+    <h2>SWE-bench：智能体能修复真实仓库中的 issue 吗？</h2>
+    <p><strong>示例任务</strong>：用空索引调用某个库函数时会错误地抛出异常。让它返回空结果，同时保持现有行为不变。</p>
+<p><strong>智能体的做法</strong>：grep 仓库 → 查看实现 → 查看测试 → 运行测试 → 修改文件 → 运行测试 → 调试 → 产出补丁</p>
+<p><strong>补丁如何计分</strong>：智能体补丁 → 应用到仓库 → 运行测试 → 是否解决</p>
+<p><strong>变体</strong></p>
+<ul><li>Verified：经人工核验</li><li>Lite：300 个任务的子集</li><li>Multilingual：9 种语言</li><li>Multimodal：包含图片的 issue</li><li>Pro：更难、跨多文件</li></ul>
+<p class="note">（来源：Jimenez et al., 2024；OpenAI, 2024；Deng et al., 2025；swebench.com）</p>
+  </div>
+</section><section class="slide" id="s18">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/7_agent_design_4/p18.jpg" alt="原版第 18 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">18 / 37</div>
+    <h2>τ-bench：智能体能否与用户交互、遵守政策并修改后端状态？</h2>
+    <p><strong>两个交互参与者 + 一套政策</strong></p>
+<ul><li>模拟用户：一个扮演顾客的 LLM</li><li>智能体：受航空公司政策约束</li><li>工具 + 航空公司数据库：API 调用会改变真实状态</li><li>航空公司政策示例：基础经济舱不可改签</li></ul>
+<p><strong>示例任务</strong>：“我需要把明天的航班改成晚上那班。”</p>
+<p>流程（灰：与用户对话；青：调用工具）：询问身份 → 查询预订 → 搜索航班 → 解释票价差额 → 获得确认 → <code>change_booking(…)</code> → 预订已更新</p>
+<div class="callout">评测最终的数据库状态。</div>
+<p class="note">（来源：Yao et al., τ-bench, arXiv 2024）</p>
+  </div>
+</section><section class="slide" id="s19">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/7_agent_design_4/p19.jpg" alt="原版第 19 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">19 / 37</div>
+    <h2>τ-bench 对终态和一致性计分</h2>
+    <p><strong>计分</strong>：原始奖励为 r = r_action × r_output</p>
+<ul><li>r_action = 1：仅当最终数据库与标注的目标状态一致</li><li>r_output = 1：仅当面向用户的回复包含所需信息</li><li>只读调用可以不同，但意外的写入会导致失败</li></ul>
+<p><strong>该基准还提出了 pass^k</strong></p>
+<ul><li><strong>pass^k</strong>：同一场景下 k 次独立运行<strong>全部</strong>成功的概率（例：4 次全成功）</li><li><strong>pass@k</strong>：只需一次成功（1 次就够）</li></ul>
+<div class="callout">pass^k 有意比 pass@k 更严格。</div>
+<p>τ³-bench 的实现现已包含修正后的任务、更多领域、知识检索和语音评测。</p>
+  </div>
+</section><section class="slide" id="s20">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/7_agent_design_4/p20.jpg" alt="原版第 20 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">20 / 37</div>
+    <h2>Terminal-Bench：智能体能通过 shell 完成真实任务吗？</h2>
+    <p><strong>任务领域</strong>：端到端的工作，不只是修仓库里的 bug——编程、系统管理与服务器配置、数据处理、模型训练、安全、科学计算工作流</p>
+<p><strong>任务如何打包和计分</strong>：任务说明（instruction.md）→ Docker 容器（Dockerfile）→ 智能体的 shell 轨迹（不计分）→ 最终系统状态（由测试检查）→ 测试套件（tests/test.sh）：通过或失败</p>
+<ul><li>TB 2.0 有 89 个任务 → TB 4.0 有 66 个</li><li>人类参考解答不公开；v4.0 剔除已饱和的任务，超时上限 8 小时</li><li><strong>代表性任务</strong>：在一个线上运行的 KV 服务上切换新协议——不能掉连接，延迟要保持住</li></ul>
+  </div>
+</section><section class="slide" id="s21">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/7_agent_design_4/p21.jpg" alt="原版第 21 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">21 / 37</div>
+    <h2>Terminal-Bench：介于 SWE-bench 与 OSWorld 之间</h2>
+    <div class="tbl"><table><thead><tr><th></th><th>SWE-bench</th><th>Terminal-Bench</th><th>OSWorld</th></tr></thead><tbody><tr><td>智能体的动作方式</td><td>编辑单个仓库中的文件</td><td>在容器中执行 shell 命令</td><td>鼠标点击和键盘输入</td></tr><tr><td>智能体观察到</td><td>代码和测试输出</td><td>终端输出</td><td>屏幕截图</td></tr><tr><td>任务范围</td><td>修复一个 GitHub issue</td><td>配置、调试、修复、构建</td><td>操作任意桌面应用</td></tr><tr><td>计分方式</td><td>仓库自带的测试</td><td>对最终系统状态的测试</td><td>对最终状态的检查</td></tr></tbody></table></div>
+<div class="callout">不涉及 GUI 定位：在无需预测鼠标坐标的前提下，测试长程推理和系统交互能力。</div>
+<p class="note">（来源：Merrill et al., Terminal-Bench 2.0, arXiv 2026）</p>
+  </div>
+</section><section class="slide" id="s22">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/7_agent_design_4/p22.jpg" alt="原版第 22 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">22 / 37</div>
+    <h2>TheAgentCompany：模拟一家公司</h2>
+    <p><strong>公司环境</strong>：GitLab（代码）、Plane（工单）、ownCloud（文档）、RocketChat（团队聊天）、由 LLM 模拟的同事</p>
+<p><strong>一项完整的工作</strong>：读工单（Plane）→ 询问同事（RocketChat）→ 查看仓库（GitLab）→ 写代码（工作区）→ 运行测试（终端）→ 更新 issue（Plane）→ 汇报结果（RocketChat）</p>
+<ul><li><strong>175 个任务</strong>：软件开发、项目管理、数据科学、人力资源、财务</li><li><strong>部分给分</strong>：用检查点给工作的每一步打分</li><li>S_partial = 0.5 · 已得/总数 + 0.5 · S_full</li><li>按进度计分：4/8 未完成 → 0.25；7/8 未完成 → 0.44；8/8 完成 → 1.00</li></ul>
+<p class="note">（来源：Xu et al., TheAgentCompany, arXiv 2024；the-agent-company.com）</p>
+  </div>
+</section><section class="slide" id="s23">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/7_agent_design_4/p23.jpg" alt="原版第 23 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">23 / 37</div>
+    <h2>智能体基准一览</h2>
+    <div class="tbl"><table><thead><tr><th>基准</th><th>智能体运行于</th><th>典型动作</th><th>评什么</th></tr></thead><tbody><tr><td>GAIA</td><td>网页 / 文件 / 代码工具</td><td>搜索、查看文件、计算</td><td>简短的最终答案</td></tr><tr><td>WebArena</td><td>自托管网站</td><td>点击、输入、导航</td><td>网站或后端状态</td></tr><tr><td>OSWorld</td><td>完整的桌面虚拟机</td><td>鼠标、键盘、应用交互</td><td>文件、应用状态、系统状态</td></tr><tr><td>SWE-bench</td><td>软件仓库</td><td>查看、编辑、运行测试</td><td>补丁能否通过测试</td></tr><tr><td>BFCL</td><td>函数 / API 接口</td><td>结构化函数调用</td><td>调用、参数及产生的状态</td></tr><tr><td>τ-bench</td><td>客服 API 与对话</td><td>与用户对话、调用 API</td><td>数据库状态与回复</td></tr><tr><td>Terminal-Bench</td><td>隔离的终端容器</td><td>任意 shell 命令</td><td>针对任务的验证测试</td></tr><tr><td>TheAgentCompany</td><td>模拟的软件公司</td><td>使用 Web 应用、代码、文件，与同事交流</td><td>工作流检查点与最终系统状态</td></tr></tbody></table></div>
+  </div>
+</section><section class="slide" id="s24">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/7_agent_design_4/p24.jpg" alt="原版第 24 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">24 / 37</div>
+    <h2>智能体评测充满挑战，且仍在演进</h2>
+    <ul><li>挑战</li><li>演进</li></ul>
+  </div>
+</section><section class="slide" id="s25">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/7_agent_design_4/p25.jpg" alt="原版第 25 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">25 / 37</div>
+    <h2>数据泄漏：四个层面，而不只是训练</h2>
+    <ul><li><strong>训练泄漏</strong>：任务或其人工修复出现在训练数据中</li><li><strong>评测时泄漏</strong>：智能体上网搜索并抄来“未来”的修复</li><li><strong>环境泄漏</strong>：沙箱暴露了未来的提交或隐藏的测试</li><li><strong>基准过拟合</strong>：提示词和脚手架是针对公开测试集调出来的</li></ul>
+<div class="callout">真实的工具 ⟺ 更大的泄漏面：智能体评测必须提供真实工具，而基准本身可能就能被搜到。</div>
+  </div>
+</section><section class="slide" id="s26">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/7_agent_design_4/p26.jpg" alt="原版第 26 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">26 / 37</div>
+    <h2>泄漏可能发生在整个智能体栈中</h2>
+    <p>现代“智能体”的表现大致是这样一个函数：</p>
+<div class="callout">P = f(LLM, 提示词, 脚手架, 工具, 检索器, 记忆, 环境)</div>
+<div class="tbl"><table><thead><tr><th>组件</th><th>可能的泄漏</th></tr></thead><tbody><tr><td>基座模型</td><td>预训练数据中含有基准样例</td></tr><tr><td>微调</td><td>用基准答案作为智能体训练轨迹</td></tr><tr><td>提示词</td><td>从测试任务中派生的少样本示例</td></tr><tr><td>检索</td><td>基准答案被索引进 RAG 语料</td></tr><tr><td>记忆</td><td>存下了之前的基准尝试</td></tr><tr><td>网络搜索</td><td>搜到了已公开的任务解答</td></tr><tr><td>环境</td><td>暴露了未来的 Git 提交 / 隐藏产物</td></tr><tr><td>脚手架</td><td>针对基准手工编写的启发式规则</td></tr><tr><td>智能体开发</td><td>研究者反复查看测试失败并调优系统</td></tr></tbody></table></div>
+<div class="callout">任何一项都可能包含基准信息。因此，“模型没有在测试集上训练过”对智能体评测来说远远不够。</div>
+  </div>
+</section><section class="slide" id="s27">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/7_agent_design_4/p27.jpg" alt="原版第 27 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">27 / 37</div>
+    <h2>智能体评测的挑战：单一用户轮次</h2>
+    <ul><li>大多数基准只给智能体一条完全明确的指令<ul><li>提示词进去，最终状态出来——回路中没有用户</li></ul></li><li>真实工作是含糊的、会被修改、会被打断的<ul><li>缺失约束、任务中途的纠正、不断变化的目标</li></ul></li><li>单轮计分奖励“自信地瞎猜”<ul><li>问一个澄清问题要花步数，却得不到任何分数</li></ul></li></ul>
+  </div>
+</section><section class="slide" id="s28">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/7_agent_design_4/p28.jpg" alt="原版第 28 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">28 / 37</div>
+    <h2>智能体评测的挑战：单一用户轮次</h2>
+    <p>这就是你们在作业 1 中使用 Claude Code 的方式。（图：作业 1 中的多轮交互统计）</p>
+  </div>
+</section><section class="slide" id="s29">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/7_agent_design_4/p29.jpg" alt="原版第 29 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">29 / 37</div>
+    <h2>智能体评测的挑战：单一用户轮次</h2>
+    <p class="note">（图表页）</p>
+  </div>
+</section><section class="slide" id="s30">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/7_agent_design_4/p30.jpg" alt="原版第 30 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">30 / 37</div>
+    <h2>智能体评测的挑战：单一用户轮次</h2>
+    <ul><li>大多数基准只给智能体一条完全明确的指令——提示词进去，最终状态出来，回路中没有用户</li><li>真实工作是含糊的、会被修改、会被打断的——缺失约束、中途纠正、目标变化</li><li>单轮计分奖励“自信地瞎猜”——问澄清问题要花步数，却拿不到分</li></ul>
+<p><strong>多轮评测应当考察：</strong></p>
+<ul><li><strong>澄清</strong>：目标不明确时它会问吗？</li><li><strong>恢复</strong>：任务中途被纠正后它会重新规划吗？</li><li><strong>记忆</strong>：它能把约束带到后续轮次吗？</li></ul>
+  </div>
+</section><section class="slide" id="s31">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/7_agent_design_4/p31.jpg" alt="原版第 31 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">31 / 37</div>
+    <h2>智能体评测的挑战：还有更多</h2>
+    <ul><li><strong>成本与延迟</strong>：只看成功率不够——一个 200 步、$40 的运行，和一个 12 步、$0.30 的运行，怎么比？</li><li><strong>非确定性</strong>：同一个智能体、同一个任务，结果不同：单次运行的分数是噪声，不是信号</li><li><strong>安全与副作用</strong>：在通过测试的路上删了文件、发了邮件、花了钱，却没有任何惩罚</li><li><strong>指标</strong>：只看结果的计分会让侥幸或不安全的运行通过；而要求轨迹匹配又会让合理的运行失败</li></ul>
+<div class="callout">参与进来：MaDSys 组正在构建一个使用真实流量的智能体评测研究平台——如果你感兴趣，并且每周有 20 小时以上可以投入，请联系我。</div>
+  </div>
+</section><section class="slide" id="s32">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/7_agent_design_4/p32.jpg" alt="原版第 32 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">32 / 37</div>
+    <h2>前沿模型追上来的速度有多快</h2>
+    <ul><li><strong>GLUE · 2018</strong>：14 个月达到人类水平（87.1），最高 91.1</li><li><strong>MMLU · 2020</strong>：39 个月达到专家水平（89.8），最高 92.3</li><li><strong>GPQA Diamond · 2023</strong>：10 个月达到博士专家水平（69.7），最高 96.0</li><li><strong>SWE-bench Verified · 2024</strong>：22 个月从 33% → 95%</li><li><strong>ARC-AGI-2 · 2025</strong>：11 个月达到普通人类水平（60），最高 95.0</li><li><strong>ARC-AGI-3 · 2026</strong>：6 个月从 0.5% → 62.7%\*</li></ul>
+  </div>
+</section><section class="slide" id="s33">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/7_agent_design_4/p33.jpg" alt="原版第 33 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">33 / 37</div>
+    <h2>基准很快就会饱和</h2>
+    <p>时间线（2016 → 2026 年 9 月），按类别：窄任务 → NLU 套件 → 知识与推理 → 助手 → 智能体</p>
+<ul><li>已饱和：SQuAD 1.1、GLUE、SuperGLUE、ARC-AGI-1、MMLU、MATH、HumanEval、Chatbot Arena、MT-Bench、WebArena、SWE-bench → Verified、GPQA Diamond、MMMU、OSWorld……</li><li>仍未解决：FrontierMath、Humanity's Last Exam、ARC-AGI-2、Terminal-Bench、GDPval、SWE-bench Pro、Remote Labor Index、ARC-AGI-3、OSWorld 2.0 等（以图为准）</li></ul>
+<div class="callout">“饱和”= 前沿模型达到人类基线，或顶尖模型之间已拉不开差距。</div>
+  </div>
+</section><section class="slide" id="s34">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/7_agent_design_4/p34.jpg" alt="原版第 34 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">34 / 37</div>
+    <h2>智能体评测仍在演进</h2>
+    <div class="tbl"><table><thead><tr><th>维度</th><th>早期评测</th><th>当前前沿</th></tr></thead><tbody><tr><td>评测对象</td><td>基座模型</td><td>模型 + 提示词 + 工具 + 智能体 Harness</td></tr><tr><td>交互</td><td>静态、单轮</td><td>有状态、长程</td></tr><tr><td>评判者</td><td>精确匹配或似然</td><td>测试、环境状态、人类或评判模型</td></tr><tr><td>数据集</td><td>固定且公开</td><td>新鲜、隐藏、动态或考虑污染</td></tr><tr><td>主要指标</td><td>平均准确率</td><td>除任务成功外的系统效率、可靠性、质量、成本和延迟</td></tr><tr><td>主要关注</td><td>跨样例的泛化</td><td>在真实约束和安全要求下稳健地完成任务</td></tr></tbody></table></div>
+  </div>
+</section><section class="slide" id="s35">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/7_agent_design_4/p35.jpg" alt="原版第 35 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">35 / 37</div>
+    <h2>真实世界的智能体要考虑更多维度</h2>
+    <p>能力 · 成本 · 速度 · 智能体可用性</p>
+<div class="callout">作业 3：你将在这三个指标上都被评测</div>
+<p class="note">（图：横轴成本（越低越好）、纵轴能力（越高越好）的帕累托分层；速度未画出）</p>
+<ul><li>若 A 在任何指标上都不比 B 差、且至少一个指标更好，则 A 支配 B</li><li>第 1 层就是帕累托前沿，其次是第 2 层、第 3 层</li></ul>
+  </div>
+</section><section class="slide" id="s36">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/7_agent_design_4/p36.jpg" alt="原版第 36 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">36 / 37</div>
+    <h2>下节课</h2>
+    <ul><li>高性价比的智能体</li><li>案例研究<ul><li>不同类型的智能体</li><li>智能体框架</li></ul></li></ul>
+  </div>
+</section><section class="slide" id="s37">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/7_agent_design_4/p37.jpg" alt="原版第 37 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">37 / 37</div>
+    <h2>（空白页）</h2>
+    
+  </div>
+</section><nav class="pager"><a href="6_agent_design_3.html">← L06 智能体设计 III：智能体记忆与可靠性</a><a href="8_agent_design_5.html">L08 高级智能体设计 I：成本与性能 →</a></nav></main>
+</div>
+<div class="lightbox" hidden><img alt=""></div>
+<script src="../assets/app.js"></script>
+</body>
+</html>

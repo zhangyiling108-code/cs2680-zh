@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CS2680 现代 AI 系统 · 中文课件</title>
+<link rel="stylesheet" href="assets/style.css">
+
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="index.html">CS2680 <span>现代 AI 系统</span></a>
+  <nav class="lecnav"><a href="lectures/1_intro.html">L01</a><a href="lectures/2_agent_use_1.html">L02</a><a href="lectures/3_agent_use_2.html">L03</a><a href="lectures/4_agent_design_1.html">L04</a><a href="lectures/5_agent_design_2.html">L05</a><a href="lectures/6_agent_design_3.html">L06</a><a href="lectures/7_agent_design_4.html">L07</a><a href="lectures/8_agent_design_5.html">L08</a><a href="lectures/9_llm_serving_basics_1.html">L09</a><a href="lectures/10_llm_serving_basics_2a.html">L10</a><a href="lectures/10_llm_serving_basics_2b.html">L11</a><a href="lectures/11_llm_serving_basics_3.html">L12</a><a href="lectures/12_llm_serving_spec_decoding.html">L13</a><a href="lectures/8_assignment3.html">A3</a></nav>
+  <div class="tools">
+    <div class="seg" role="group" aria-label="显示模式">
+      <button data-mode="both" title="原图 + 中文">对照</button>
+      <button data-mode="zh" title="只看中文">中文</button>
+      <button data-mode="img" title="只看原版">原版</button>
+    </div>
+    <button class="theme" title="切换深浅色" aria-label="切换深浅色">◐</button>
+  </div>
+</header>
+<main class="home">
+
+<section class="cover">
+  <div class="kicker">哈佛大学 SEAS · 2026 秋季 · 讲师 Juncheng Yang · 非官方中文译本</div>
+  <h1>CS2680 现代 AI 系统<br><span>智能体与系统优化</span></h1>
+  <div class="en">Modern AI Systems: Agents and System Optimizations</div>
+  <p class="lead">这门课沿着<b>同一个智能体系统</b>，从智能体循环一路向下贯穿到推理服务栈。
+  你先使用一个现代编程智能体（Claude Code），再利用提供的 API 设计你自己的智能体，测量它、优化它；
+  然后亲手部署一个开放权重模型，并为其下面的各层负责：批处理与调度、KV-cache 与前缀复用、路由、量化与推测解码。</p>
+  <div class="facts">
+    <div><b>先修</b>CS61 + 至少一门研究生级计算机系统课；熟悉 Python 与 PyTorch</div>
+    <div><b>考核</b>5 个作业 + 期末项目 + 课堂参与，无考试</div>
+    <div><b>上课</b>周一、周三 11:15–12:30 · SEC LL2.229</div>
+  </div>
+</section>
+<section class="stack">
+  <h2 class="sec">五个作业：沿技术栈逐层向下</h2>
+  <ol class="steps">
+    <li><b>Mads-Lens</b>看智能体如何工作 <i>10%</i></li>
+    <li><b>Mads-Loop</b>亲手搭建智能体循环 <i>10%</i></li>
+    <li><b>Mads-Opt</b>让每个 token 都物有所值 <i>20%</i></li>
+    <li><b>Mads-Serve</b>掌控推理服务引擎 <i>20%</i></li>
+    <li><b>Mads-Stack</b>优化整个技术栈 <i>10%</i></li>
+  </ol>
+  <p class="note">“Mads” 是 Modern Agent Design and Systems（现代智能体设计与系统）的缩写，也致敬了开设本课的哈佛 MaDSys 研究组。
+  课程期望：这门课不会教会你完成作业所需的每一个知识点，而是专注于“学习的技能”，并为你指出值得探索的方向——请预期课后要花大量时间自学与实验。</p>
+</section>
+
+<h2 class="sec">第一部分 · LLM 与智能体入门</h2><div class="lecs"><a class="lec" href="lectures/1_intro.html">
+  <div class="no">L01</div>
+  <div class="info"><div class="t">课程概览与事务安排</div><div class="e">Course overview and logistics</div>
+  <div class="s">这门课讲什么、五个作业与项目、评分政策；AI 系统与智能体系统为何不同于传统计算机系统。</div></div>
+  <div class="when">第 1 周 · 2026-09-02</div>
+</a><a class="lec" href="lectures/2_agent_use_1.html">
+  <div class="no">L02</div>
+  <div class="info"><div class="t">智能体使用 I：Claude Code 是如何工作的</div><div class="e">Agents use I: How Claude Code Works</div>
+  <div class="s">LLM 基础与智能体循环；拆解 Claude Code 的上下文、工具、权限与会话机制，以及高效使用它的方法。</div></div>
+  <div class="when">第 2 周 · 2026-09-09</div>
+</a><a class="lec" href="lectures/3_agent_use_2.html">
+  <div class="no">L03</div>
+  <div class="info"><div class="t">智能体使用 II：用多智能体成为 100 倍工程师</div><div class="e">Agents use II: 100x Engineer with Multi-agents</div>
+  <div class="s">子智能体、并行智能体、智能体团队；如何拆分任务、验证产出，把多个智能体组织成高效的工程流程。</div></div>
+  <div class="when">第 3 周 · 2026-09-14</div>
+</a><a class="lec" href="lectures/4_agent_design_1.html">
+  <div class="no">L04</div>
+  <div class="info"><div class="t">智能体设计 I：上下文管理与工具设计</div><div class="e">Agents design I: context management and tool design</div>
+  <div class="s">从零设计一个智能体：智能体循环、上下文工程（压缩、检索、缓存友好）与工具接口设计。</div></div>
+  <div class="when">第 3 周 · 2026-09-16</div>
+</a><a class="lec" href="lectures/5_agent_design_2.html">
+  <div class="no">L05</div>
+  <div class="info"><div class="t">智能体设计 II：多智能体架构、协调与通信</div><div class="e">Agents design II: multi-agent architecture, coordination, and communication</div>
+  <div class="s">何时该用多智能体、常见架构模式、智能体之间如何分工与通信，以及多智能体带来的代价。</div></div>
+  <div class="when">第 4 周 · 2026-09-23</div>
+</a><a class="lec" href="lectures/6_agent_design_3.html">
+  <div class="no">L06</div>
+  <div class="info"><div class="t">智能体设计 III：智能体记忆与可靠性</div><div class="e">Agents design III: agent memory and reliability</div>
+  <div class="s">智能体的记忆层次与持久化；智能体在哪里失败、如何提升可靠性。</div></div>
+  <div class="when">第 5 周 · 2026-09-28</div>
+</a><a class="lec" href="lectures/7_agent_design_4.html">
+  <div class="no">L07</div>
+  <div class="info"><div class="t">智能体设计 IV：智能体评测</div><div class="e">Agent design IV: agent evaluation</div>
+  <div class="s">如何评测智能体：评测设计、指标、可靠性、成本与基准测试的选择。</div></div>
+  <div class="when">第 5 周 · 2026-09-30</div>
+</a><a class="lec" href="lectures/8_agent_design_5.html">
+  <div class="no">L08</div>
+  <div class="info"><div class="t">高级智能体设计 I：成本与性能</div><div class="e">Advanced agent design I: Cost and performance</div>
+  <div class="s">在整个任务维度上分配模型、推理、上下文、协作与推理服务资源，打造高性价比的智能体。</div></div>
+  <div class="when">第 6 周 · 2026-10-07</div>
+</a></div>
+<h2 class="sec">第二部分 · 面向 LLM 与智能体的系统</h2><div class="lecs"><a class="lec" href="lectures/9_llm_serving_basics_1.html">
+  <div class="no">L09</div>
+  <div class="info"><div class="t">高效 LLM 推理服务基础 I：LLM 入门</div><div class="e">Efficient LLM serving basics I: intro to LLMs</div>
+  <div class="s">一个 LLM 请求的生命周期（分词→调度→预填充→解码→流式输出）；Transformer 块、注意力与 GQA、MoE，以及滑动窗口、MLA、线性注意力、扩散 LM 等新变体。</div></div>
+  <div class="when">第 8 周 · 2026-10-19</div>
+</a><a class="lec" href="lectures/10_llm_serving_basics_2a.html">
+  <div class="no">L10</div>
+  <div class="info"><div class="t">高效 LLM 推理服务基础 II：GPU 入门</div><div class="e">Efficient LLM serving basics II: intro to GPUs</div>
+  <div class="s">GPU 为何是“吞吐机器”：SIMT、warp 与延迟隐藏；roofline 与算术强度、batch-1 解码为何吃不满 GPU；SM、Tensor Core、存储层次与 Hopper/Blackwell 新特性。</div></div>
+  <div class="when">第 8 周 · 2026-10-21</div>
+</a><a class="lec" href="lectures/10_llm_serving_basics_2b.html">
+  <div class="no">L11</div>
+  <div class="info"><div class="t">GPU 编程（续）</div><div class="e">GPU programming (cont.)</div>
+  <div class="s">GPU 编程模型与 Triton / TileLang / CUTLASS 等抽象层级；用 MFU、MBU 和剖析工具衡量效率；kernel 融合、FlashAttention、持久化 kernel、CUDA Graphs、Megakernel 等近期进展。</div></div>
+  <div class="when">第 10 周 · 2026-11-02</div>
+</a><a class="lec" href="lectures/11_llm_serving_basics_3.html">
+  <div class="no">L12</div>
+  <div class="info"><div class="t">高效 LLM 推理服务基础 III：批处理、分页与并行</div><div class="e">Efficient LLM serving basics III: Batching, paging, and parallelism</div>
+  <div class="s">推理服务的指标与评测陷阱；连续批处理与选择性批处理、分块预填充与 PD 分离、SJF 类调度；PagedAttention 与前缀缓存；DP / TP / PP / EP / 上下文并行。</div></div>
+  <div class="when">第 10 周 · 2026-11-04</div>
+</a><a class="lec" href="lectures/12_llm_serving_spec_decoding.html">
+  <div class="no">L13</div>
+  <div class="info"><div class="t">高效 LLM 推理服务：推测解码</div><div class="e">Efficient LLM serving: speculative decoding</div>
+  <div class="s">推测解码为何精确（拒绝采样）与加速比公式 S = E/(ck+1)；从独立小模型到 Medusa、EAGLE 1–4、MTP、DFlash、后缀检索等草稿方法；树验证、有损变体，以及按负载动态选择 k。</div></div>
+  <div class="when">第 11 周 · 2026-11-11</div>
+</a></div>
+<h2 class="sec">作业讲义</h2><div class="lecs"><a class="lec" href="lectures/8_assignment3.html">
+  <div class="no">A3</div>
+  <div class="info"><div class="t">作业 3 — Mads-Opt：Harness 优化竞赛</div><div class="e">Assignment 3 — Mads-Opt: Harness Competition</div>
+  <div class="s">优化你的编程智能体 Harness，让每个 token 都物有所值；按排行榜排名与相对基线的提升计分。</div></div>
+  <div class="when">作业 3 · 10-05 发布</div>
+</a></div>
+
+<section class="gloss">
+  <h2 class="sec">术语对照</h2>
+  <p class="note">译文力求贴合课程语境：业界通行的英文术语保留原文或在首次出现时括注。</p>
+  <dl>
+    <div><dt>Agent / Agentic</dt><dd>智能体 / 智能体式的</dd></div>
+    <div><dt>Harness</dt><dd>Harness（智能体运行框架：包住模型的循环、工具、上下文与权限管理）</dd></div>
+    <div><dt>Subagent</dt><dd>子智能体</dd></div>
+    <div><dt>Context / Context window</dt><dd>上下文 / 上下文窗口</dd></div>
+    <div><dt>Tool call</dt><dd>工具调用</dd></div>
+    <div><dt>Trajectory</dt><dd>轨迹（智能体一次任务中的完整步骤序列）</dd></div>
+    <div><dt>Serving</dt><dd>推理服务</dd></div>
+    <div><dt>Prefill / Decode</dt><dd>预填充 / 解码</dd></div>
+    <div><dt>KV-cache / Prefix cache</dt><dd>KV 缓存 / 前缀缓存</dd></div>
+    <div><dt>Batching / Continuous batching</dt><dd>批处理 / 连续批处理</dd></div>
+    <div><dt>Speculative decoding</dt><dd>推测解码</dd></div>
+    <div><dt>Throughput / Latency</dt><dd>吞吐量 / 延迟</dd></div>
+    <div><dt>TTFT / TPOT</dt><dd>首 token 延迟 / 每输出 token 耗时</dd></div>
+    <div><dt>Kernel</dt><dd>kernel（GPU 上执行的计算函数）</dd></div>
+    <div><dt>Leaderboard</dt><dd>排行榜</dd></div>
+    <div><dt>TF</dt><dd>助教（Teaching Fellow）</dd></div>
+  </dl>
+</section>
+<footer class="foot">
+  原课程：<a href="https://cs2680.com" target="_blank" rel="noopener">cs2680.com</a>（Harvard SEAS · Juncheng Yang）。
+  本网页为个人学习用的非官方中文翻译，版权归原作者所有；每页均附原版页面图像以便对照。
+</footer>
+
+</main>
+<script src="assets/app.js"></script>
+</body>
+</html>

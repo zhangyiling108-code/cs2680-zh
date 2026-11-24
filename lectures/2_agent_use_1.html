@@ -1,0 +1,532 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L02 智能体使用 I：Claude Code 是如何工作的 · CS2680</title>
+<link rel="stylesheet" href="../assets/style.css">
+
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">CS2680 <span>现代 AI 系统</span></a>
+  <nav class="lecnav"><a href="../lectures/1_intro.html">L01</a><a class="on" href="../lectures/2_agent_use_1.html">L02</a><a href="../lectures/3_agent_use_2.html">L03</a><a href="../lectures/4_agent_design_1.html">L04</a><a href="../lectures/5_agent_design_2.html">L05</a><a href="../lectures/6_agent_design_3.html">L06</a><a href="../lectures/7_agent_design_4.html">L07</a><a href="../lectures/8_agent_design_5.html">L08</a><a href="../lectures/9_llm_serving_basics_1.html">L09</a><a href="../lectures/10_llm_serving_basics_2a.html">L10</a><a href="../lectures/10_llm_serving_basics_2b.html">L11</a><a href="../lectures/11_llm_serving_basics_3.html">L12</a><a href="../lectures/12_llm_serving_spec_decoding.html">L13</a><a href="../lectures/8_assignment3.html">A3</a></nav>
+  <div class="tools">
+    <div class="seg" role="group" aria-label="显示模式">
+      <button data-mode="both" title="原图 + 中文">对照</button>
+      <button data-mode="zh" title="只看中文">中文</button>
+      <button data-mode="img" title="只看原版">原版</button>
+    </div>
+    <button class="theme" title="切换深浅色" aria-label="切换深浅色">◐</button>
+  </div>
+</header>
+<div class="layout">
+  <aside class="toc"><div class="toc-h">本讲目录</div><ol><li><a href="#s1"><b>1</b>现代 AI 系统：智能体与系统优化</a></li><li><a href="#s2"><b>2</b>课表调整</a></li><li><a href="#s3"><b>3</b>其他几件事</a></li><li><a href="#s4"><b>4</b>今天的安排</a></li><li><a href="#s5"><b>5</b>当你在 Claude Code 里输入一个提示词时，发生了什么？</a></li><li><a href="#s6"><b>6</b>智能体循环（The Agentic Loop）</a></li><li><a href="#s7"><b>7</b>你还没打字，上下文就已经有了</a></li><li><a href="#s8"><b>8</b>它不会把整个仓库发出去</a></li><li><a href="#s9"><b>9</b>模型提议，Harness 执行</a></li><li><a href="#s10"><b>10</b>一条用户提示词会触发多次 LLM 推理</a></li><li><a href="#s11"><b>11</b>权限位于“意图”与“执行”之间</a></li><li><a href="#s12"><b>12</b>上下文不断增长——然后被压缩</a></li><li><a href="#s13"><b>13</b>小结：智能体循环</a></li><li><a href="#s14"><b>14</b>工具与记忆赋予智能体能力</a></li><li><a href="#s15"><b>15</b>智能体的记忆</a></li><li><a href="#s16"><b>16</b>上下文是记忆的一种</a></li><li><a href="#s17"><b>17</b>智能体为什么需要记忆</a></li><li><a href="#s18"><b>18</b>两套系统负责把知识带到下一次</a></li><li><a href="#s19"><b>19</b>两套系统负责把知识带到下一次</a></li><li><a href="#s20"><b>20</b>CLAUDE.md 放在哪里</a></li><li><a href="#s21"><b>21</b>CLAUDE.md 里该写什么</a></li><li><a href="#s22"><b>22</b>太长了？拆到 .claude/rules/ 里</a></li><li><a href="#s23"><b>23</b>自动记忆：Claude 自己的笔记</a></li><li><a href="#s24"><b>24</b>检索依靠索引</a></li><li><a href="#s25"><b>25</b>查看与控制记忆</a></li><li><a href="#s26"><b>26</b>记忆的代价</a></li><li><a href="#s27"><b>27</b>工具与记忆赋予智能体能力</a></li><li><a href="#s28"><b>28</b>成为能行动的智能体：核心工具</a></li><li><a href="#s29"><b>29</b>扩展智能体：Skills、MCP、Hooks 与插件</a></li><li><a href="#s30"><b>30</b>扩展智能体</a></li><li><a href="#s31"><b>31</b>智能体循环中的扩展点</a></li><li><a href="#s32"><b>32</b>示例：发布流程</a></li><li><a href="#s33"><b>33</b>Skill：可复用的流程</a></li><li><a href="#s34"><b>34</b>Skill 的结构</a></li><li><a href="#s35"><b>35</b>Skill 的调用方式与上下文成本</a></li><li><a href="#s36"><b>36</b>MCP：外部能力层</a></li><li><a href="#s37"><b>37</b>一次 MCP 工具调用如何进行</a></li><li><a href="#s38"><b>38</b>Hook：生命周期自动化</a></li><li><a href="#s39"><b>39</b>插件：打包层</a></li><li><a href="#s40"><b>40</b>四种机制如何配合</a></li><li><a href="#s41"><b>41</b>.claude/ 目录里有什么</a></li><li><a href="#s42"><b>42</b>设计练习</a></li><li><a href="#s43"><b>43</b>下节课</a></li><li><a href="#s44"><b>44</b>选读幻灯片</a></li><li><a href="#s45"><b>45</b>MCP：是什么，为什么</a></li><li><a href="#s46"><b>46</b>MCP 架构</a></li><li><a href="#s47"><b>47</b>MCP 的三大核心原语</a></li><li><a href="#s48"><b>48</b>它们如何协同</a></li><li><a href="#s49"><b>49</b>MCP 安全：最关键的部分</a></li><li><a href="#s50"><b>50</b>什么是 MCP 网关</a></li><li><a href="#s51"><b>51</b>网关做什么</a></li><li><a href="#s52"><b>52</b>有什么新变化？</a></li><li><a href="#s53"><b>53</b>（空白页）</a></li></ol></aside>
+  <main><div class="hero">
+  <div class="kicker">第一部分 · LLM 与智能体入门 · 第 2 周 · 2026-09-09</div>
+  <h1>智能体使用 I：Claude Code 是如何工作的</h1>
+  <div class="en">Agents use I: How Claude Code Works</div>
+  <p class="lead">LLM 基础与智能体循环；拆解 Claude Code 的上下文、工具、权限与会话机制，以及高效使用它的方法。</p>
+  <div class="readings"><b>推荐阅读</b><a href="https://www.youtube.com/watch?v=EWvNQjAaOHw" target="_blank" rel="noopener">How I use LLMs（Karpathy）</a><a href="https://code.claude.com/docs/en/best-practices" target="_blank" rel="noopener">Claude Code 最佳实践</a><a href="https://simonwillison.net/guides/agentic-engineering-patterns/" target="_blank" rel="noopener">Agentic Engineering Patterns</a><a href="https://cs2680.com/readings/sep-09.html" target="_blank" rel="noopener">更多阅读 →</a></div>
+  <div class="meta">共 53 页 · 原版 PDF：<a href="../../2_agent_use_1.pdf">2_agent_use_1.pdf</a> · 键盘 ←/→ 或 J/K 翻页</div>
+</div><section class="slide" id="s1">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/2_agent_use_1/p01.jpg" alt="原版第 1 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">1 / 53</div>
+    <h2>现代 AI 系统：智能体与系统优化</h2>
+    <p>Juncheng Yang</p>
+<p>用户视角下的智能体 I：Claude Code 是如何工作的</p>
+  </div>
+</section><section class="slide" id="s2">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/2_agent_use_1/p02.jpg" alt="原版第 2 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">2 / 53</div>
+    <h2>课表调整</h2>
+    <p><strong>LLM 背景知识挪到后面讲</strong></p>
+<ul><li>暂时把 LLM 当作一个“会推理的魔法黑盒”</li><li>学习智能体并不需要先懂它的内部原理</li></ul>
+<p><strong>多讲智能体，少讲 GPU</strong></p>
+<ul><li>大多数同学对智能体更感兴趣</li><li>新增两次智能体设计课</li><li>减少 GPU 课——与其他课程的重叠更少</li></ul>
+<p><strong>课表上的变化</strong></p>
+<ul><li>论文展示不再强制</li><li>这部分分数转给课堂参与和课程项目</li><li>作业 1 的分享改为加分项</li><li>另有几次论文讨论加分机会——待定</li></ul>
+  </div>
+</section><section class="slide" id="s3">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/2_agent_use_1/p03.jpg" alt="原版第 3 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">3 / 53</div>
+    <h2>其他几件事</h2>
+    <ul><li>新助教：Advaith Ravishankar</li><li>课堂参与分：在课上提问/回答问题，每节课最多 1 分，课后找助教登记</li><li><strong>举手 = 得分</strong></li><li>拓展阅读：选读<ul><li><strong>OPTIONAL（选读）</strong>——额外阅读，不作要求</li><li><strong>ADVANCED（进阶）</strong>——略读，或自行深入</li></ul></li></ul>
+  </div>
+</section><section class="slide" id="s4">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/2_agent_use_1/p04.jpg" alt="原版第 4 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">4 / 53</div>
+    <h2>今天的安排</h2>
+    <ul><li>Claude Code 是如何工作的</li><li>Claude Code：从无状态的 LLM 到智能体</li><li>记忆</li><li>工具、Skills、Hooks、插件</li></ul>
+  </div>
+</section><section class="slide" id="s5">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/2_agent_use_1/p05.jpg" alt="原版第 5 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">5 / 53</div>
+    <h2>当你在 Claude Code 里输入一个提示词时，发生了什么？</h2>
+    <p>举手 = 得分</p>
+  </div>
+</section><section class="slide" id="s6">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/2_agent_use_1/p06.jpg" alt="原版第 6 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">6 / 53</div>
+    <h2>智能体循环（The Agentic Loop）</h2>
+    <ol><li><strong>收集上下文</strong>：提示词、文件、工具结果</li><li><strong>生成动作</strong>：运行一个工具——bash、read、edit</li><li><strong>执行工具</strong>：测试、输出、重新读取状态</li></ol>
+<p>循环往复——每一步都以上一步返回的结果为条件。</p>
+<div class="callout">一条用户提示词 = 多次模型调用 + 多次工具执行，而不是单个请求。</div>
+<p class="note">（图：三方角色——Harness、模型、你的机器）</p>
+  </div>
+</section><section class="slide" id="s7">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/2_agent_use_1/p07.jpg" alt="原版第 7 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">7 / 53</div>
+    <h2>你还没打字，上下文就已经有了</h2>
+    <p>在你敲下第一个键之前，上下文已经有 1 万+ token：</p>
+<ul><li><strong>SYSTEM</strong>：Claude Code 的系统指令</li><li><strong>PROJECT</strong>：环境信息</li><li><strong>MEMORY</strong>：持久化的项目/用户笔记 / CLAUDE.md</li><li><strong>TOOLS</strong>：Read、Edit、Bash、Glob、Grep、Web、Agent</li><li><strong>SKILLS / MCP</strong>：名称与描述</li><li><strong>USER</strong>：“修复那个失败的鉴权测试”</li></ul>
+<div class="callout">Skill 和 MCP 的条目一开始只放名字——只有当 Claude 真正要用它们时，才加载全文。</div>
+  </div>
+</section><section class="slide" id="s8">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/2_agent_use_1/p08.jpg" alt="原版第 8 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">8 / 53</div>
+    <h2>它不会把整个仓库发出去</h2>
+    <p>仓库留在磁盘上，Claude 按需拉取其中的片段。</p>
+<ul><li>你的仓库：成千上万个文件，在磁盘上</li><li>Claude：“我需要什么？” → <code>Grep("authentication")</code></li><li>返回寥寥几行 → 这一片段进入上下文</li></ul>
+  </div>
+</section><section class="slide" id="s9">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/2_agent_use_1/p09.jpg" alt="原版第 9 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">9 / 53</div>
+    <h2>模型提议，Harness 执行</h2>
+    <p>模型提出一个动作，由 Harness 来执行它：</p>
+<ol><li><strong>Claude 模型</strong>：发出请求 <code>Bash("pytest")</code></li><li><strong>Claude Code Harness</strong>：解析请求、检查权限、执行</li><li><strong>你的机器</strong>：pytest 真正运行 → stdout / stderr</li><li><strong>tool_result</strong> 回到模型的上下文中</li></ol>
+  </div>
+</section><section class="slide" id="s10">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/2_agent_use_1/p10.jpg" alt="原版第 10 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">10 / 53</div>
+    <h2>一条用户提示词会触发多次 LLM 推理</h2>
+    <p>一个用户轮次会展开成“推理—工具执行”交替的链条：</p>
+<p>U 提示词 → M₁ 推理 → T₁ 工具 → M₂ 推理 → T₂ 工具 → … → Mₙ 推理 → A 回答</p>
+<p><strong>实际过程大概是这样：</strong></p>
+<p>pytest → 读 session.py → grep create_session → 编辑 session.py → pytest → 全部通过</p>
+<div class="callout">每个请求都以前一次推理和前一次工具结果为条件。</div>
+  </div>
+</section><section class="slide" id="s11">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/2_agent_use_1/p11.jpg" alt="原版第 11 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">11 / 53</div>
+    <h2>权限位于“意图”与“执行”之间</h2>
+    <p>工具请求只是一个提议，需要你（或另一个模型）批准。</p>
+<ul><li>Claude 请求：<code>Bash("rm -rf build/")</code></li><li><strong>权限层</strong>的几种模式：手动 / 自动接受编辑 / 跳过权限 / Auto（由一个小模型来检查）</li><li>结果：<strong>允许</strong>——命令执行；<strong>询问</strong>——先由你确认；<strong>拒绝</strong>——什么也不发生</li></ul>
+  </div>
+</section><section class="slide" id="s12">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/2_agent_use_1/p12.jpg" alt="原版第 12 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">12 / 53</div>
+    <h2>上下文不断增长——然后被压缩</h2>
+    <p>每一步都会增加 token：模型回复、文件内容、命令输出。</p>
+<p>请求 1 → 请求 2 → 请求 3 → … → 请求 N → <strong>压缩（COMPACTION）</strong> → 请求 N+1</p>
+<ul><li>压缩：总结旧的轨迹，重新注入 CLAUDE.md 和记忆</li><li>上下文管理是 Harness 设计的重要组成部分（下周讨论）</li><li>典型上下文大小：100 万 token（Sonnet / Opus / Fable、GPT 5.6）；今年早些时候常见的是 256K</li></ul>
+<div class="callout">上下文不是免费的：前缀缓存读取占了成本的大头。</div>
+  </div>
+</section><section class="slide" id="s13">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/2_agent_use_1/p13.jpg" alt="原版第 13 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">13 / 53</div>
+    <h2>小结：智能体循环</h2>
+    <p>提示词 + 上下文 → 模型提议 → Harness 执行 → 结果并入上下文</p>
+<div class="callout">循环往复，直到任务完成。</div>
+  </div>
+</section><section class="slide" id="s14">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/2_agent_use_1/p14.jpg" alt="原版第 14 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">14 / 53</div>
+    <h2>工具与记忆赋予智能体能力</h2>
+    <p class="note">（图：智能体 = LLM + 记忆 + 推理与规划；通过工具/动作作用于环境，从环境获得观察）</p>
+  </div>
+</section><section class="slide" id="s15">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/2_agent_use_1/p15.jpg" alt="原版第 15 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">15 / 53</div>
+    <h2>智能体的记忆</h2>
+    <ul><li>LLM（无状态）</li><li>工具（行动）</li><li>状态（上下文 + 记忆）</li></ul>
+  </div>
+</section><section class="slide" id="s16">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/2_agent_use_1/p16.jpg" alt="原版第 16 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">16 / 53</div>
+    <h2>上下文是记忆的一种</h2>
+    <ul><li>智能体在两次运行之间是无状态的——每个会话都从零开始</li><li>实践中，“记忆”不过是在会话启动时加载的文件</li></ul>
+<p><strong>上下文：工作记忆</strong>——模型此刻能看到的东西，随会话结束而消失。</p>
+<p><strong>持久记忆</strong>——在会话结束后保留下来、下次重新加载的东西。</p>
+<div class="callout">每创建一条记忆，都是在决定：哪些内容要被永远反复读取。</div>
+  </div>
+</section><section class="slide" id="s17">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/2_agent_use_1/p17.jpg" alt="原版第 17 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">17 / 53</div>
+    <h2>智能体为什么需要记忆</h2>
+    <ul><li><strong>重复的指令</strong>：每个会话都要把同样的配置解释一遍</li><li><strong>丢失的决策/假设</strong>：窗口一压缩，“为什么”就没了</li><li><strong>重复的探索</strong>：智能体反复读同样的文件来重新熟悉项目结构</li><li><strong>行为不一致</strong>：不同会话做出不同的选择</li></ul>
+<div class="callout">记忆，就是让“指令”沉淀为“惯例”的方式。</div>
+  </div>
+</section><section class="slide" id="s18">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/2_agent_use_1/p18.jpg" alt="原版第 18 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">18 / 53</div>
+    <h2>两套系统负责把知识带到下一次</h2>
+    <p>两者都在每次会话开始时加载进上下文。</p>
+<div class="tbl"><table><thead><tr><th></th><th>CLAUDE.md 文件</th><th>自动记忆（Auto memory）</th></tr></thead><tbody><tr><td>由谁编写</td><td>你</td><td>Claude</td></tr><tr><td>内容</td><td>指令与规则</td><td>经验与模式</td></tr><tr><td>作用范围</td><td>项目、用户或组织</td><td>每个仓库一份，多个 worktree 共享</td></tr><tr><td>加载时机</td><td>每个会话</td><td>每个会话（前 200 行 / 25KB）</td></tr><tr><td>用途</td><td>规范、工作流、架构</td><td>你的偏好、纠正、项目背景</td></tr></tbody></table></div>
+  </div>
+</section><section class="slide" id="s19">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/2_agent_use_1/p19.jpg" alt="原版第 19 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">19 / 53</div>
+    <h2>两套系统负责把知识带到下一次</h2>
+    <p>（同上页，强调对比）</p>
+<div class="tbl"><table><thead><tr><th></th><th>CLAUDE.md 文件</th><th>自动记忆（Auto memory）</th></tr></thead><tbody><tr><td>由谁编写</td><td>你</td><td>Claude</td></tr><tr><td>内容</td><td>指令与规则</td><td>经验与模式</td></tr><tr><td>作用范围</td><td>项目、用户或组织</td><td>每个仓库一份，多个 worktree 共享</td></tr><tr><td>加载时机</td><td>每个会话</td><td>每个会话（前 200 行 / 25KB）</td></tr><tr><td>用途</td><td>规范、工作流、架构</td><td>你的偏好、纠正、项目背景</td></tr></tbody></table></div>
+  </div>
+</section><section class="slide" id="s20">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/2_agent_use_1/p20.jpg" alt="原版第 20 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">20 / 53</div>
+    <h2>CLAUDE.md 放在哪里</h2>
+    <p>按作用范围从大到小加载，离当前目录最近的文件最后读取。</p>
+<ul><li><strong>托管策略</strong>：<code>…/ClaudeCode/CLAUDE.md</code>——组织范围，无法排除</li><li><strong>用户指令</strong>：<code>~/.claude/CLAUDE.md</code>——你的个人偏好，作用于所有项目</li><li><strong>项目指令</strong>：<code>./CLAUDE.md</code> 或 <code>./.claude/CLAUDE.md</code>——通过版本控制与团队共享</li><li><strong>本地指令</strong>：<code>./CLAUDE.local.md</code>——个人使用，被 gitignore</li></ul>
+  </div>
+</section><section class="slide" id="s21">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/2_agent_use_1/p21.jpg" alt="原版第 21 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">21 / 53</div>
+    <h2>CLAUDE.md 里该写什么</h2>
+    <div class="callout">上下文是租来的，记忆是自己的——慎重选择你要“拥有”什么。</div>
+<ul><li><strong>篇幅</strong>：每个文件不超过 200 行</li><li><strong>结构</strong>：Markdown 标题和列表</li><li><strong>具体</strong>：具体的规则，而不是含糊的</li><li><strong>一致</strong>：没有相互矛盾或过时的规则</li></ul>
+<p><strong>该写的</strong></p>
+<ul><li>命令：怎么跑测试、构建、linter</li><li>硬约束：绝不直接提交到 main、绝不编辑生成的文件</li><li>智能体无法低成本推断的事实：目录结构、归属、坑点</li></ul>
+<p><strong>不该写的</strong></p>
+<ul><li>模型本来就知道的语言或框架知识</li><li>linter 或格式化工具已经强制的风格偏好</li><li>长篇大论、更新日志，以及任何机密信息</li></ul>
+  </div>
+</section><section class="slide" id="s22">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/2_agent_use_1/p22.jpg" alt="原版第 22 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">22 / 53</div>
+    <h2>太长了？拆到 .claude/rules/ 里</h2>
+    <p>每个文件一个主题——每条规则只在相关时才加载。</p>
+<ul><li><strong>一个文件一个主题</strong>：每个规则文件只管一件事，保持简短具体</li><li><strong>加上 <code>paths:</code> 前置元数据</strong>：只有当 Claude 碰到匹配的文件时才加载（不写 paths 则每个会话都加载）</li></ul>
+<pre><code>.claude/rules/
+├── testing.md
+├── api-style.md
+└── db-migrations.md</code></pre>
+<p><strong>要点</strong></p>
+<ul><li>限定范围的规则让上下文窗口保持精简</li><li>只加载与当前工作匹配的规则</li><li>CLAUDE.md 保持简短，细节放在 rules 里</li></ul>
+  </div>
+</section><section class="slide" id="s23">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/2_agent_use_1/p23.jpg" alt="原版第 23 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">23 / 53</div>
+    <h2>自动记忆：Claude 自己的笔记</h2>
+    <ul><li><strong>user</strong>：你的角色、专长与工作偏好</li><li><strong>feedback</strong>：你给出的纠正、你认可的做法</li><li><strong>project</strong>：进行中的工作、代码里看不出的决策</li><li><strong>reference</strong>：存放在项目之外的信息</li></ul>
+<pre><code>~/.claude/projects/&lt;project&gt;/memory/
+├── MEMORY.md
+├── user_role.md
+├── feedback_testing.md
+└── other-topic-files.md</code></pre>
+<p><strong>它的行为方式</strong></p>
+<ul><li>每个文件用 type 字段标注类型</li><li>MEMORY.md 是索引——每个会话加载前 200 行（25KB）</li><li>仅存在本机；各 worktree 共享同一目录</li><li>默认开启；可用 /memory 关闭</li></ul>
+  </div>
+</section><section class="slide" id="s24">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/2_agent_use_1/p24.jpg" alt="原版第 24 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">24 / 53</div>
+    <h2>检索依靠索引</h2>
+    <p>索引始终加载；主题文件只在相关时才读取。</p>
+<p>会话开始 → 加载 MEMORY.md 索引 → 识别相关主题 → 按需读取主题文件 → 把记忆应用到任务上</p>
+<div class="callout">索引让上下文窗口保持精简——只读取任务真正需要的那个主题文件。</div>
+  </div>
+</section><section class="slide" id="s25">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/2_agent_use_1/p25.jpg" alt="原版第 25 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">25 / 53</div>
+    <h2>查看与控制记忆</h2>
+    <p>四个命令，用来查看并引导 Claude 记住什么：</p>
+<ul><li><code>/memory</code>——浏览、编辑、删除或关闭记忆</li><li><code>/context</code>——查看加载了哪些指令文件</li><li><code>/init</code>——生成一份初始 CLAUDE.md</li><li><code>/doctor</code>——找出可能不该放进 CLAUDE.md 的内容</li></ul>
+  </div>
+</section><section class="slide" id="s26">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/2_agent_use_1/p26.jpg" alt="原版第 26 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">26 / 53</div>
+    <h2>记忆的代价</h2>
+    <ul><li>每一个永久 token 都是“房租”——在每个会话开始时支付</li><li>记忆和任务争夺同一个上下文窗口</li><li>过时的记忆比没有记忆更糟：它会主动误导</li><li>像对待代码一样对待记忆——审查它、修剪它、纳入版本控制</li></ul>
+<div class="callout">上下文大小有限 + 你发给 Anthropic 的每个 token 都要付费。</div>
+  </div>
+</section><section class="slide" id="s27">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/2_agent_use_1/p27.jpg" alt="原版第 27 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">27 / 53</div>
+    <h2>工具与记忆赋予智能体能力</h2>
+    <p class="note">（图：智能体 = LLM + 记忆 + 推理与规划；通过工具/动作作用于环境，从环境获得观察）</p>
+  </div>
+</section><section class="slide" id="s28">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/2_agent_use_1/p28.jpg" alt="原版第 28 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">28 / 53</div>
+    <h2>成为能行动的智能体：核心工具</h2>
+    <ul><li><strong>Read</strong>：打开文件、检查状态——最常用的工具</li><li><strong>Search</strong>：grep 和 glob——不必通读一切就能找到目标</li><li><strong>Fetch</strong>：拉取网页或文档——会把不可信文本带进来</li><li><strong>Edit / Write</strong>：修改文件——第一个会产生后果的工具</li><li><strong>Shell</strong>：构建、测试、git——除非有沙箱，否则相当于整台机器</li><li><strong>Delegate</strong>：派生子智能体——一个返回摘要的工具</li></ul>
+<div class="callout">用哪个工具由模型决定，你需要做的不多。<br>在作业 2 中，你将亲手实现这些工具。</div>
+  </div>
+</section><section class="slide" id="s29">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/2_agent_use_1/p29.jpg" alt="原版第 29 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">29 / 53</div>
+    <h2>扩展智能体：Skills、MCP、Hooks 与插件</h2>
+    
+  </div>
+</section><section class="slide" id="s30">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/2_agent_use_1/p30.jpg" alt="原版第 30 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">30 / 53</div>
+    <h2>扩展智能体</h2>
+    <p>四种机制，解决四种不同的问题——它们不能互相替代。</p>
+<ul><li><strong>Skill</strong>：智能体应当<strong>如何</strong>完成一项任务</li><li><strong>MCP</strong>：它能触达哪些<strong>外部</strong>数据和动作</li><li><strong>Hook</strong>：在某个生命周期事件发生时<strong>自动</strong>执行什么</li><li><strong>Plugin（插件）</strong>：扩展如何被<strong>打包和分发</strong></li></ul>
+<div class="callout">四层分工：Skill 决定怎么做，MCP 连接外部，Hook 负责强制执行，插件负责分发。</div>
+  </div>
+</section><section class="slide" id="s31">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/2_agent_use_1/p31.jpg" alt="原版第 31 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">31 / 53</div>
+    <h2>智能体循环中的扩展点</h2>
+    <p>每种机制挂接在循环的不同位置：</p>
+<ul><li>用户请求</li><li>模型推理 ← <strong>Skill</strong> 提供知识和流程</li><li>工具选择 ← <strong>MCP</strong> 提供外部工具</li><li>工具执行</li><li><strong>Hook</strong> 可以在循环的任何阶段进行检查、拦截或响应</li><li><strong>插件</strong>把 Skills、MCP 服务器和 Hooks 打包成一个可安装的单元</li></ul>
+  </div>
+</section><section class="slide" id="s32">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/2_agent_use_1/p32.jpg" alt="原版第 32 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">32 / 53</div>
+    <h2>示例：发布流程</h2>
+    <p>准备一个版本、验证它、发布到 GitHub、通知团队。</p>
+<ul><li>按发布流程操作 → <strong>Skill</strong></li><li>创建 GitHub release → <strong>MCP</strong></li><li>测试失败时阻止发布 → <strong>Hook</strong></li><li>共享整套配置 → <strong>插件</strong></li></ul>
+  </div>
+</section><section class="slide" id="s33">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/2_agent_use_1/p33.jpg" alt="原版第 33 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">33 / 53</div>
+    <h2>Skill：可复用的流程</h2>
+    <p>当任务需要时，智能体加载的知识与流程。</p>
+<p><strong>一个 Skill 携带：</strong></p>
+<ul><li>领域知识</li><li>参考资料</li><li>可重复的工作流</li><li>可由模型调用，也可由用户调用</li><li>运行时推理</li></ul>
+<div class="callout">把它看作一种上下文工程（context engineering）。</div>
+<p>例如：<code>/release 2.4.0</code></p>
+  </div>
+</section><section class="slide" id="s34">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/2_agent_use_1/p34.jpg" alt="原版第 34 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">34 / 53</div>
+    <h2>Skill 的结构</h2>
+    <p>一个文件夹；一段控制“何时被发现”的描述；一段承载流程的正文。</p>
+<pre><code>.claude/skills/release/
+├── SKILL.md
+├── references/
+└── scripts/
+
+name: release
+description: Prepare a release</code></pre>
+<p><strong>工作方式</strong></p>
+<ul><li>description 控制发现</li><li>正文承载流程</li><li>辅助文件提供参考资料和脚本</li><li>用户也可以直接运行：<code>/release</code></li></ul>
+<p>正文示例：1 阅读发布说明 · 2 确认版本号 · 3 运行测试 · 4 准备提交 · 5 发布前先询问</p>
+  </div>
+</section><section class="slide" id="s35">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/2_agent_use_1/p35.jpg" alt="原版第 35 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">35 / 53</div>
+    <h2>Skill 的调用方式与上下文成本</h2>
+    <p>两种调用方式——两种不同的上下文成本。</p>
+<ul><li><strong>模型调用</strong>：当描述与任务匹配时，Claude 加载该 Skill</li><li><strong>用户调用</strong>：用户显式运行 <code>/&lt;skill-name&gt;</code></li></ul>
+<p><strong>成本</strong></p>
+<ul><li>描述在会话启动时加载；完整正文只在 Skill 运行时才加载</li><li>有副作用的工作流通常应要求显式调用</li><li>清晰、互相区分的描述能减少选错 Skill</li></ul>
+  </div>
+</section><section class="slide" id="s36">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/2_agent_use_1/p36.jpg" alt="原版第 36 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">36 / 53</div>
+    <h2>MCP：外部能力层</h2>
+    <p>模型上下文协议（Model Context Protocol）通过标准协议把智能体连接到外部服务：</p>
+<ul><li>读取和更新 GitHub issue</li><li>查询数据库</li><li>获取监控数据</li><li>访问 Figma 设计稿</li><li>向 Slack 发消息</li><li>控制浏览器</li></ul>
+<div class="callout">MCP 赋予 Claude 一些既不在模型里、也不在本地文件里的能力。</div>
+  </div>
+</section><section class="slide" id="s37">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/2_agent_use_1/p37.jpg" alt="原版第 37 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">37 / 53</div>
+    <h2>一次 MCP 工具调用如何进行</h2>
+    <p>从意图到结构化结果的六步：</p>
+<ol><li>Claude 识别出需要执行的动作</li><li>MCP 客户端调用一个工具</li><li>MCP 服务器处理连接</li><li>外部服务执行操作</li><li>结构化结果返回给 Claude</li><li>Claude 评估结果</li></ol>
+<p><strong>几乎和本地工具一样</strong></p>
+<ul><li>同样有名称、描述和类型化的 schema</li><li>同样的“调用—返回”约定</li><li>只是运行在另一个进程里</li></ul>
+<div class="callout">协议负责传递调用；要不要调用，仍由智能体决定。</div>
+  </div>
+</section><section class="slide" id="s38">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/2_agent_use_1/p38.jpg" alt="原版第 38 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">38 / 53</div>
+    <h2>Hook：生命周期自动化</h2>
+    <p>会话从左到右推进；在每个标记的事件处都可以触发 Hook：</p>
+<ul><li><strong>会话开始</strong>：加载上下文、记录日志</li><li><strong>用户提示词</strong>：校验或补充</li><li><strong>工具调用前</strong>：检查或拦截</li><li><strong>工具调用后</strong>：格式化、测试、记录日志</li><li><strong>停止前</strong>：验证测试</li><li><strong>模型推理</strong>：没有 Hook——推理不是一个事件</li></ul>
+<div class="callout">Hook 在事件上触发，可以运行命令、HTTP 请求、MCP 工具、提示词或子智能体。</div>
+  </div>
+</section><section class="slide" id="s39">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/2_agent_use_1/p39.jpg" alt="原版第 39 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">39 / 53</div>
+    <h2>插件：打包层</h2>
+    <p>一个可安装单元，包含 Skills、Hooks、智能体和 MCP 配置。</p>
+<pre><code>plugin/
+├── skills/
+├── hooks/
+├── agents/
+├── .mcp.json
+├── .lsp.json
+└── .claude-plugin/plugin.json</code></pre>
+<p><strong>打包带来的好处</strong></p>
+<ul><li>安装——一条命令</li><li>版本管理——锁定版本</li><li>命名空间——避免重名冲突</li><li>团队复用——所有人用同一套配置</li><li>分发——通过插件市场共享</li></ul>
+<div class="callout">插件让一套好用的配置变成别人可以安装的东西。</div>
+  </div>
+</section><section class="slide" id="s40">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/2_agent_use_1/p40.jpg" alt="原版第 40 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">40 / 53</div>
+    <h2>四种机制如何配合</h2>
+    <p>判断、能力、强制——以及把三者一起交付的包。</p>
+<ul><li><strong>Skill</strong>：知识与流程</li><li><strong>Claude</strong>：推理与工具使用</li><li><strong>MCP</strong>：GitHub · Slack · 数据库</li><li><strong>Hook</strong>：在生命周期事件上触发——每次工具调用前后</li><li><strong>插件</strong>：把 Skill、MCP 配置和 Hooks 打包，以便在别处安装</li></ul>
+  </div>
+</section><section class="slide" id="s41">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/2_agent_use_1/p41.jpg" alt="原版第 41 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">41 / 53</div>
+    <h2>.claude/ 目录里有什么</h2>
+    <pre><code>.claude/
+  CLAUDE.md
+  settings.json
+  settings.local.json
+  commands/
+  skills/
+  agents/
+  hooks/
+  plugins/</code></pre>
+<ul><li><strong>记忆</strong>：CLAUDE.md、rules/</li><li><strong>配置</strong>：权限、hooks、环境变量</li><li><strong>工作流</strong>：skills/、commands/</li><li><strong>委派与护栏</strong>：agents/、hooks/</li></ul>
+<div class="callout">用户级别在 <code>~/.claude/</code> 下有同样的布局。项目设置优先于用户设置。</div>
+  </div>
+</section><section class="slide" id="s42">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/2_agent_use_1/p42.jpg" alt="原版第 42 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">42 / 53</div>
+    <h2>设计练习</h2>
+    <p>给每条需求归类——并说明为什么其他机制不合适。（举手 = 得分）</p>
+<ul><li>应用公司的 API 规范 → Skill</li><li>从 Jira 读取一个 issue → MCP</li><li>每次编辑后自动格式化 → Hook</li><li>引导一次多步骤部署 → Skill</li><li>发送完成通知 → Hook + MCP</li><li>禁止写入生产环境 → Hook 或策略</li><li>在多个仓库之间共享全部配置 → 插件</li></ul>
+<div class="callout">Skill = 知识与流程 · MCP = 外部访问 · Hook = 事件自动化 · 插件 = 打包与分发</div>
+  </div>
+</section><section class="slide" id="s43">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/2_agent_use_1/p43.jpg" alt="原版第 43 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">43 / 53</div>
+    <h2>下节课</h2>
+    <ul><li>用户视角下的智能体 II</li></ul>
+  </div>
+</section><section class="slide" id="s44">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/2_agent_use_1/p44.jpg" alt="原版第 44 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">44 / 53</div>
+    <h2>选读幻灯片</h2>
+    
+  </div>
+</section><section class="slide" id="s45">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/2_agent_use_1/p45.jpg" alt="原版第 45 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">45 / 53</div>
+    <h2>MCP：是什么，为什么</h2>
+    <p>如果我需要访问外部服务怎么办？Gmail、GitHub……</p>
+<p><strong>为什么需要 MCP：访问外部工具与服务</strong></p>
+<ul><li>在 MCP 出现之前：需要 N×M 种实现</li><li>它避免了为每个 AI 客户端单独构建一套集成</li></ul>
+<div class="callout">一个开放协议（无状态），让 AI 应用能发现并使用外部服务器暴露的能力。</div>
+<p><a href="https://modelcontextprotocol.io" target="_blank" rel="noopener">https://modelcontextprotocol.io</a></p>
+  </div>
+</section><section class="slide" id="s46">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/2_agent_use_1/p46.jpg" alt="原版第 46 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">46 / 53</div>
+    <h2>MCP 架构</h2>
+    <ul><li><strong>Host（宿主）</strong>：Claude Code——你与之对话的应用</li><li><strong>MCP 客户端</strong>：每个服务器一个连接，由宿主运行</li><li><strong>MCP 协议</strong></li><li><strong>MCP 服务器</strong>：把某个系统的能力暴露为工具</li><li><strong>外部系统</strong>：GitHub、Slack、PostgreSQL、某个本地服务</li></ul>
+  </div>
+</section><section class="slide" id="s47">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/2_agent_use_1/p47.jpg" alt="原版第 47 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">47 / 53</div>
+    <h2>MCP 的三大核心原语</h2>
+    <ul><li><strong>Tools（工具）</strong>：Claude 可以调用的动作，如 <code>create_issue(…)</code></li><li><strong>Resources（资源）</strong>：可读取的数据——一个 issue、一个 schema，如 <code>github://issues/123</code></li><li><strong>Prompts（提示词）</strong>：服务器暴露的可复用提示词模板，如 <code>triage_issue(…)</code></li></ul>
+<p><strong>一个 Prompt 返回一组指令：</strong></p>
+<ul><li>审查 issue #123</li><li>判断它是否可复现</li><li>将其严重程度评为高</li><li>推荐负责人和下一步行动</li></ul>
+<p><strong>Prompts 由用户控制</strong>：应用会把它们呈现为命令或菜单项。在 Claude Code 中，它们是带命名空间的斜杠命令：</p>
+<p><code>/mcp__github__triage_issue 123 high</code></p>
+  </div>
+</section><section class="slide" id="s48">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/2_agent_use_1/p48.jpg" alt="原版第 48 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">48 / 53</div>
+    <h2>它们如何协同</h2>
+    <p>假设你问：“分诊 issue #123，如果是严重的鉴权 bug 就指派出去。”</p>
+<p>三种原语可能这样合作：</p>
+<ul><li><strong>Prompt</strong> <code>triage_issue</code>：提供组织的分诊流程</li><li><strong>Resource</strong> <code>github://issues/123</code>：提供 issue 的内容</li><li><strong>Tool</strong> <code>get_related_errors</code>：获取当前的诊断信息</li></ul>
+  </div>
+</section><section class="slide" id="s49">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/2_agent_use_1/p49.jpg" alt="原版第 49 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">49 / 53</div>
+    <h2>MCP 安全：最关键的部分</h2>
+    <p>一个已连接的服务器能看到你发给它的内容，并以你的凭证行事。</p>
+<ul><li><strong>最小权限</strong>——把 token 的范围限定在你真正需要的仓库、表或频道</li><li><strong>读写分离</strong>——把读和写分开；变更操作需要审批</li><li><strong>不信任工具输出</strong>——绝不把返回内容当作指令</li><li><strong>安装前审查</strong>——第三方服务器可能携带提示词注入；先审查</li></ul>
+<div class="callout">连接之前先问：这个服务器能读什么？能改什么？</div>
+  </div>
+</section><section class="slide" id="s50">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/2_agent_use_1/p50.jpg" alt="原版第 50 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">50 / 53</div>
+    <h2>什么是 MCP 网关</h2>
+    <p>位于 AI 客户端与一个或多个 MCP 服务器之间的控制层。</p>
+<ul><li>类似 API 网关——但它说的是 MCP：tools/list、tools/call、resources、prompts、schemas、协议版本</li><li>它是一种架构模式；对客户端来说，它看起来就是另一个 MCP 服务器</li></ul>
+<p class="note">（图：Claude Code / 智能体 → MCP 网关〔鉴权 · 策略 · 日志 · 路由 · 限流〕→ GitHub MCP / Jira MCP / 数据库 MCP）</p>
+  </div>
+</section><section class="slide" id="s51">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/2_agent_use_1/p51.jpg" alt="原版第 51 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">51 / 53</div>
+    <h2>网关做什么</h2>
+    <ol><li><strong>聚合</strong>：一个连接、一个带命名空间的目录：github.\*、jira.\*、postgres.\*</li><li><strong>路由</strong>：把每次调用转发给所属服务器；<code>Mcp-Method</code> 头让网关无需读取请求体即可路由</li><li><strong>执行策略</strong>：谁可以连接，哪些工具可见、可调用或需要人工审批</li><li><strong>代理身份</strong>：客户端只认证一次；上游凭证留在网关之后</li><li><strong>可观测</strong>：集中的审计记录——身份、工具、决策、延迟、结果、成本</li><li><strong>扩展</strong>：负载均衡、重试、熔断、目录缓存、配额</li></ol>
+<p><strong>值得用的场景</strong>：大量用户、智能体、服务器、凭证或合规规则需要统一治理时。</p>
+<p><strong>但它是一个信任边界</strong>：宽泛的凭证、终端用户身份丢失、名称冲突、日志中泄露机密、单点故障。</p>
+<div class="callout">OPTIONAL——拓展阅读，不作要求</div>
+  </div>
+</section><section class="slide" id="s52">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/2_agent_use_1/p52.jpg" alt="原版第 52 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">52 / 53</div>
+    <h2>有什么新变化？</h2>
+    <p>规范 2026-07-28——MCP 发布以来最大的一次修订</p>
+<ul><li><strong>无状态核心</strong>：不需要保持会话。任何请求都可以落到任意实例上，放在普通负载均衡器后面即可。</li><li><strong>路由</strong>：<code>Mcp-Method</code> 头让网关无需读取请求体即可路由；list 结果可按 TTL 缓存。</li><li><strong>扩展</strong>：用于长时间任务的 Tasks，以及用于服务端渲染 UI 的 MCP Apps，现在以扩展形式提供。</li></ul>
+<div class="callout">OPTIONAL——拓展阅读，不作要求</div>
+  </div>
+</section><section class="slide" id="s53">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/2_agent_use_1/p53.jpg" alt="原版第 53 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">53 / 53</div>
+    <h2>（空白页）</h2>
+    
+  </div>
+</section><nav class="pager"><a href="1_intro.html">← L01 课程概览与事务安排</a><a href="3_agent_use_2.html">L03 智能体使用 II：用多智能体成为 100 倍工程师 →</a></nav></main>
+</div>
+<div class="lightbox" hidden><img alt=""></div>
+<script src="../assets/app.js"></script>
+</body>
+</html>

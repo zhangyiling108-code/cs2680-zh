@@ -1,0 +1,523 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L08 高级智能体设计 I：成本与性能 · CS2680</title>
+<link rel="stylesheet" href="../assets/style.css">
+
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">CS2680 <span>现代 AI 系统</span></a>
+  <nav class="lecnav"><a href="../lectures/1_intro.html">L01</a><a href="../lectures/2_agent_use_1.html">L02</a><a href="../lectures/3_agent_use_2.html">L03</a><a href="../lectures/4_agent_design_1.html">L04</a><a href="../lectures/5_agent_design_2.html">L05</a><a href="../lectures/6_agent_design_3.html">L06</a><a href="../lectures/7_agent_design_4.html">L07</a><a class="on" href="../lectures/8_agent_design_5.html">L08</a><a href="../lectures/9_llm_serving_basics_1.html">L09</a><a href="../lectures/10_llm_serving_basics_2a.html">L10</a><a href="../lectures/10_llm_serving_basics_2b.html">L11</a><a href="../lectures/11_llm_serving_basics_3.html">L12</a><a href="../lectures/12_llm_serving_spec_decoding.html">L13</a><a href="../lectures/8_assignment3.html">A3</a></nav>
+  <div class="tools">
+    <div class="seg" role="group" aria-label="显示模式">
+      <button data-mode="both" title="原图 + 中文">对照</button>
+      <button data-mode="zh" title="只看中文">中文</button>
+      <button data-mode="img" title="只看原版">原版</button>
+    </div>
+    <button class="theme" title="切换深浅色" aria-label="切换深浅色">◐</button>
+  </div>
+</header>
+<div class="layout">
+  <aside class="toc"><div class="toc-h">本讲目录</div><ol><li><a href="#s1"><b>1</b>现代 AI 系统：智能体与系统优化</a></li><li><a href="#s2"><b>2</b>事务安排</a></li><li><a href="#s3"><b>3</b>事务安排</a></li><li><a href="#s4"><b>4</b>今天的安排</a></li><li><a href="#s5"><b>5</b>设计高性价比的智能体</a></li><li><a href="#s6"><b>6</b>回顾一个会话的结构</a></li><li><a href="#s7"><b>7</b>成本从哪里来？</a></li><li><a href="#s8"><b>8</b>你们的 Claude Code 使用情况：每会话轮次数</a></li><li><a href="#s9"><b>9</b>减少每个任务的（用户）轮次</a></li><li><a href="#s10"><b>10</b>你们的 Claude Code 使用情况：每轮步数</a></li><li><a href="#s11"><b>11</b>减少每轮的步数</a></li><li><a href="#s12"><b>12</b>复用计划、Skill 和经验：相关论文</a></li><li><a href="#s13"><b>13</b>你们的 Claude Code 使用情况：每步 token 数</a></li><li><a href="#s14"><b>14</b>你们的 Claude Code 使用情况：token 随步数变化</a></li><li><a href="#s15"><b>15</b>你们的 Claude Code 使用情况：大部分 token 是缓存读取</a></li><li><a href="#s16"><b>16</b>减少每步的输入 token：保持上下文精简</a></li><li><a href="#s17"><b>17</b>减少每步的输入 token：相关论文</a></li><li><a href="#s18"><b>18</b>减少每步的输出 token：少要一点</a></li><li><a href="#s19"><b>19</b>减少每步的输出 token：schema 与 effort</a></li><li><a href="#s20"><b>20</b>减少每步的输出 token：相关论文</a></li><li><a href="#s21"><b>21</b>降低每 token 价格：缓存与批处理</a></li><li><a href="#s22"><b>22</b>降低每 token 价格：模型路由</a></li><li><a href="#s23"><b>23</b>降低每 token 价格：后续课程中的系统技术</a></li><li><a href="#s24"><b>24</b>降低每 token 价格：相关论文</a></li><li><a href="#s25"><b>25</b>每一项节省都有反向成本</a></li><li><a href="#s26"><b>26</b>给每个任务设预算，进展停滞就停下</a></li><li><a href="#s27"><b>27</b>你真的需要 LLM 吗？</a></li><li><a href="#s28"><b>28</b>让你的智能体更快</a></li><li><a href="#s29"><b>29</b>完成时间取决于关键路径，而不是所有步骤之和</a></li><li><a href="#s30"><b>30</b>加速 LLM 推理服务</a></li><li><a href="#s31"><b>31</b>改进编排</a></li><li><a href="#s32"><b>32</b>加速工具调用</a></li><li><a href="#s33"><b>33</b>并行化工作</a></li><li><a href="#s34"><b>34</b>推测式动作（Speculative actions）</a></li><li><a href="#s35"><b>35</b>推测的对象是什么</a></li><li><a href="#s36"><b>36</b>预测从哪里来</a></li><li><a href="#s37"><b>37</b>两个例子</a></li><li><a href="#s38"><b>38</b>在循环中优化：运行、测量、修改，再来一遍</a></li><li><a href="#s39"><b>39</b>智能体架构</a></li><li><a href="#s40"><b>40</b>三种 Harness 架构</a></li><li><a href="#s41"><b>41</b>单体式 Harness：一个运行时实现记忆、工具、上下文、规划和执行</a></li><li><a href="#s42"><b>42</b>模块化 Harness：智能体仍控制循环，但通过接口访问各组件</a></li><li><a href="#s43"><b>43</b>智能体微内核：一个小运行时负责协调，外部服务提供能力</a></li><li><a href="#s44"><b>44</b>运行一段 Python 代码：只有微内核把沙箱管理交给独立服务</a></li><li><a href="#s45"><b>45</b>微内核用简单和低开销，换来隔离、共享和规模</a></li><li><a href="#s46"><b>46</b>八个 Harness</a></li><li><a href="#s47"><b>47</b>Codex CLI 的独特之处</a></li><li><a href="#s48"><b>48</b>DeepSeek Harness 的独特之处</a></li><li><a href="#s49"><b>49</b>OpenCode 的独特之处</a></li><li><a href="#s50"><b>50</b>Pi 的独特之处</a></li><li><a href="#s51"><b>51</b>oh-my-pi 的独特之处</a></li><li><a href="#s52"><b>52</b>OpenClaw 的独特之处</a></li><li><a href="#s53"><b>53</b>Hermes Agent 的独特之处</a></li><li><a href="#s54"><b>54</b>下节课</a></li></ol></aside>
+  <main><div class="hero">
+  <div class="kicker">第一部分 · LLM 与智能体入门 · 第 6 周 · 2026-10-07</div>
+  <h1>高级智能体设计 I：成本与性能</h1>
+  <div class="en">Advanced agent design I: Cost and performance</div>
+  <p class="lead">在整个任务维度上分配模型、推理、上下文、协作与推理服务资源，打造高性价比的智能体。</p>
+  <div class="readings"><b>推荐阅读</b><a href="https://cs2680.com/notes/cost-effective-agents.html" target="_blank" rel="noopener">Cost-effective agents（课程笔记）</a></div>
+  <div class="meta">共 54 页 · 原版 PDF：<a href="../../8_agent_design_5.pdf">8_agent_design_5.pdf</a> · 键盘 ←/→ 或 J/K 翻页</div>
+</div><section class="slide" id="s1">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_agent_design_5/p01.jpg" alt="原版第 1 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">1 / 54</div>
+    <h2>现代 AI 系统：智能体与系统优化</h2>
+    <p>Juncheng Yang</p>
+<p>智能体设计 V：高性价比的智能体</p>
+  </div>
+</section><section class="slide" id="s2">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_agent_design_5/p02.jpg" alt="原版第 2 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">2 / 54</div>
+    <h2>事务安排</h2>
+    <ul><li>作业 3 今天开始<ul><li>比之前的作业难得多</li><li>排行榜：每天提交次数有限，不能用迟交日</li><li>占总成绩 20%：把它当成期中考试</li><li>尽早开始</li></ul></li><li>下周有答疑（时间待定）</li><li>作业调整<ul><li>作业 4 现在占 20 分，作业 5 占 10 分</li><li>原因：作业 5 太难，而且与课程项目及其他课程的项目重叠</li></ul></li></ul>
+  </div>
+</section><section class="slide" id="s3">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_agent_design_5/p03.jpg" alt="原版第 3 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">3 / 54</div>
+    <h2>事务安排</h2>
+    <ul><li>课表调整<ul><li>部分课程提前，以配合作业调整</li><li>两次加分的论文展示课：今天开放报名</li></ul></li><li>Claude Code 会话日志<ul><li>更新所有相关会话的日志</li><li><strong>不要篡改会话日志</strong>：这违反学术诚信</li></ul></li></ul>
+  </div>
+</section><section class="slide" id="s4">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_agent_design_5/p04.jpg" alt="原版第 4 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">4 / 54</div>
+    <h2>今天的安排</h2>
+    <ul><li>高性价比的智能体</li><li>智能体架构</li><li>编程智能体案例研究</li></ul>
+  </div>
+</section><section class="slide" id="s5">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_agent_design_5/p05.jpg" alt="原版第 5 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">5 / 54</div>
+    <h2>设计高性价比的智能体</h2>
+    <p>本讲聚焦 LLM 成本，暂不考虑其他计算成本。</p>
+  </div>
+</section><section class="slide" id="s6">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_agent_design_5/p06.jpg" alt="原版第 6 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">6 / 54</div>
+    <h2>回顾一个会话的结构</h2>
+    <p>会话 → 轮次 1、轮次 2、轮次 3……</p>
+<p>每一轮：用户消息 → 模型调用 → 工具调用 → 模型调用 → 回复用户</p>
+<div class="callout">一个用户轮次 = 多个 LLM 与工具步骤（steps）</div>
+  </div>
+</section><section class="slide" id="s7">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_agent_design_5/p07.jpg" alt="原版第 7 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">7 / 54</div>
+    <h2>成本从哪里来？</h2>
+    <div class="callout">成本 = 用户数 × 每用户会话数 × 每会话轮次数 × 每轮步数 × 每步 token 数 × 每 token 价格</div>
+<ul><li>↑ <strong>增长</strong>：用户数、会话数——采用度与参与度</li><li>↓ <strong>压缩</strong>：轮次、步数、token——智能体轨迹</li><li>↓ <strong>压缩</strong>：单价</li></ul>
+  </div>
+</section><section class="slide" id="s8">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_agent_design_5/p08.jpg" alt="原版第 8 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">8 / 54</div>
+    <h2>你们的 Claude Code 使用情况：每会话轮次数</h2>
+    <ul><li>大多数会话只有一条提示词<ul><li>很好：大多数同学每个任务都开一个新会话</li></ul></li><li>少数人跑“马拉松”会话</li><li>单提示词会话占比：作业 1 为 68%，作业 2 为 75%</li><li>马拉松：100 轮以上</li></ul>
+  </div>
+</section><section class="slide" id="s9">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_agent_design_5/p09.jpg" alt="原版第 9 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">9 / 54</div>
+    <h2>减少每个任务的（用户）轮次</h2>
+    <p>第 k 轮要重读第 1 … k−1 轮，所以总成本随轮次数的平方增长。</p>
+<p>用户为什么会回来：没有计划、过早停止，或者从没检查过。</p>
+<ul><li><strong>前置规划</strong>：行动前一次性确认目标和计划</li><li><strong>结构化任务分解</strong>：拆成子任务，每个都有完成检查</li><li><strong>交付前自我验证</strong>：返回前先跑测试、检查输出</li></ul>
+<div class="callout">目标：自主完成任务，无需用户中途介入。</div>
+  </div>
+</section><section class="slide" id="s10">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_agent_design_5/p10.jpg" alt="原版第 10 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">10 / 54</div>
+    <h2>你们的 Claude Code 使用情况：每轮步数</h2>
+    <ul><li>大多数轮次只需要几步<ul><li>主要因为 effort 设置为 medium 或 high</li></ul></li><li>有些轮次跑了将近 1,000 步</li></ul>
+<p class="note">（图：作业 1 与作业 2 的每轮步数中位数分布）</p>
+  </div>
+</section><section class="slide" id="s11">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_agent_design_5/p11.jpg" alt="原版第 11 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">11 / 54</div>
+    <h2>减少每轮的步数</h2>
+    <ul><li><strong>每个动作一次调用</strong>：4 次模型调用（模型 → 工具 → 模型 → 工具 → 模型 → 工具 → 模型）</li><li><strong>先规划，再批量</strong>：2 次模型调用（模型 → 3 个工具并行 → 模型）</li></ul>
+<p><strong>做法</strong></p>
+<ul><li><strong>批量处理独立调用</strong>：一步读五个文件，而不是分五步</li><li><strong>复用计划和 Skill</strong>：重放以前有效的做法，而不是重新推导</li><li><strong>预先加载上下文</strong>：在开始时就读入需要的文件，而不是每步读一个</li></ul>
+<div class="callout">每次模型调用都会重读完整上下文，所以调用越少越省钱。</div>
+  </div>
+</section><section class="slide" id="s12">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_agent_design_5/p12.jpg" alt="原版第 12 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">12 / 54</div>
+    <h2>复用计划、Skill 和经验：相关论文</h2>
+    <ul><li><strong>Skill 库</strong>：Voyager（2023）存储可执行的技能；SkillRL（2026）联合改进技能库与智能体策略</li><li><strong>从经验中提炼洞察</strong>：ExpeL（2023）提取可复用的洞察；ReasoningBank（2025）保留成功和失败运行中的策略</li><li><strong>剧本与计划模板</strong>：Test-Time Plan Caching（2025）复用并调整计划模板</li><li><strong>持久的对话记忆</strong>：Mem0（2025）存储和更新事实；LightMem（2025）离线整合；SimpleMem（2026）压缩记忆</li></ul>
+<div class="callout">当任务反复出现时，复用才划算；记忆的维护和过时条目可能把节省全部抵消。<br>ADVANCED——略读，或自行深入</div>
+  </div>
+</section><section class="slide" id="s13">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_agent_design_5/p13.jpg" alt="原版第 13 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">13 / 54</div>
+    <h2>你们的 Claude Code 使用情况：每步 token 数</h2>
+    <ul><li><strong>主智能体</strong>：中位数 20 万–30 万；p90：60 万–70 万</li><li><strong>子智能体</strong>：中位数约 8 万；p90：约 20 万</li><li>主智能体中位数：作业 1 为 208K，作业 2 为 301K</li></ul>
+  </div>
+</section><section class="slide" id="s14">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_agent_design_5/p14.jpg" alt="原版第 14 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">14 / 54</div>
+    <h2>你们的 Claude Code 使用情况：token 随步数变化</h2>
+    <ul><li>上下文不断累积，增长很快</li><li>第 ~500 步时的上下文：作业 1 为 670K，作业 2 为 650K</li></ul>
+  </div>
+</section><section class="slide" id="s15">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_agent_design_5/p15.jpg" alt="原版第 15 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">15 / 54</div>
+    <h2>你们的 Claude Code 使用情况：大部分 token 是缓存读取</h2>
+    <ul><li>输出比新的预填充（缓存写入）小 5 倍</li><li>新的预填充比缓存读取小 100 倍</li><li>典型价格比：缓存读取 : 输入 : 输出 = 1 : 10 : 50</li><li>缓存读取 token 占比：作业 1 为 <strong>97.6%</strong></li></ul>
+  </div>
+</section><section class="slide" id="s16">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_agent_design_5/p16.jpg" alt="原版第 16 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">16 / 54</div>
+    <h2>减少每步的输入 token：保持上下文精简</h2>
+    <p><strong>丢掉过时的</strong></p>
+<ul><li>截断过时结果：遮蔽已经用过的工具输出</li><li>压缩历史：把旧轮次总结成状态</li></ul>
+<p><strong>缩小进入的</strong></p>
+<ul><li>压缩观察：保留错误，而不是完整日志</li><li>卸载到文件：保存大输出，只传路径</li></ul>
+<p><strong>只加载需要的</strong></p>
+<ul><li>有选择地检索：只取相关的工具和记忆</li><li>隔离探索：子智能体只返回摘要</li></ul>
+<div class="callout">留在上下文里的 token，会在之后每一步被重复付费。</div>
+  </div>
+</section><section class="slide" id="s17">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_agent_design_5/p17.jpg" alt="原版第 17 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">17 / 54</div>
+    <h2>减少每步的输入 token：相关论文</h2>
+    <ul><li><strong>压缩智能体历史</strong>：ACON（2025）峰值上下文减少 26–54%；Active Context Compression（2026）智能体自我压缩，token 减少 23%；TRACE（2026）指出摘要会导致返工</li><li><strong>把上下文当作外部记忆</strong>：MemGPT（2023）把上下文视为快速内存；Scroll（2026）无损的外部日志，由代码挑选模型能看到什么</li><li><strong>提示词压缩</strong>：LLMLingua（2023）token 最多减少 20 倍；LongLLMLingua、LLMLingua-2（2024）；Prompt Compression in the Wild（2026）只在长提示词上才划算</li><li><strong>让工具数据不进上下文</strong>：Code execution with MCP（2025）在代码中过滤结果，150K → 2K token；Tool Search（2025）工具 token 减少 85%；Programmatic Tool Calling 减少 37%</li></ul>
+<div class="callout">ADVANCED——略读，或自行深入</div>
+  </div>
+</section><section class="slide" id="s18">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_agent_design_5/p18.jpg" alt="原版第 18 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">18 / 54</div>
+    <h2>减少每步的输出 token：少要一点</h2>
+    <p><strong>提示词层面的约束</strong>：说明长度、格式以及要省略什么</p>
+<pre><code>Answer in ≤100 words.
+Return only JSON.
+One sentence. Top 3 items.
+Don&#x27;t restate the problem.
+Don&#x27;t explain your reasoning.</code></pre>
+<p>简洁的系统提示词：“Be concise; omit background unless requested.”</p>
+<p><strong>输出 token 上限</strong>：在 API 调用中设置硬上限，如 <code>max_tokens=300</code>、<code>max_output_tokens=300</code></p>
+<ul><li>简单，但截断可能把答案切在半句话</li><li>与“简洁输出”的提示词配合使用</li><li>陷阱：推理过程可能把上限耗光</li></ul>
+  </div>
+</section><section class="slide" id="s19">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_agent_design_5/p19.jpg" alt="原版第 19 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">19 / 54</div>
+    <h2>减少每步的输出 token：schema 与 effort</h2>
+    <p><strong>结构化输出</strong>：要求一个只含必要字段的 schema</p>
+<pre><code>{&quot;action&quot;: &quot;search&quot;,
+ &quot;argument&quot;: &quot;KV cache&quot;}</code></pre>
+<ul><li>限制枚举值和可选字段，让模型无法添加多余内容</li><li>适合使用工具的智能体：工具调用周围的文字纯属成本</li></ul>
+<p><strong>自适应推理强度</strong>：让思考预算与步骤相匹配</p>
+<pre><code>lookup: effort=&quot;low&quot;
+debug:  effort=&quot;high&quot;</code></pre>
+<ul><li>查找和格式化用低 effort；规划和调试用高 effort</li><li>按调用或按步设置，形式可以是 reasoning effort 或思考 token 预算</li></ul>
+  </div>
+</section><section class="slide" id="s20">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_agent_design_5/p20.jpg" alt="原版第 20 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">20 / 54</div>
+    <h2>减少每步的输出 token：相关论文</h2>
+    <ul><li><strong>提示词与预算</strong>：Concise CoT（2024）要求简洁；CCoT（2024）在思维链中限制字数；Chain of Draft（2025）简短草稿；TALE（2024）推理 token 预算</li><li><strong>自适应推理强度</strong>：Ares（2026）按步选择 effort；When to Plan（2025）只在有用时规划；s1、L1（2025）强制思考预算；Reason Efficiently、ShorterBetter</li><li><strong>结构化输出与解码</strong>：Let Me Speak Freely?（2024）严格格式可能损害推理；XGrammar、SGLang（2024）；JSONSchemaBench（2025）</li><li><strong>只输出变化的部分</strong>：AdaEdit（2026）在 diff 与整文件之间选择；CodeStruct（2026）AST 级编辑；造工具的智能体（2026）可复用工具让输出 token 减少 58%</li></ul>
+<div class="callout">ADVANCED——略读，或自行深入</div>
+  </div>
+</section><section class="slide" id="s21">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_agent_design_5/p21.jpg" alt="原版第 21 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">21 / 54</div>
+    <h2>降低每 token 价格：缓存与批处理</h2>
+    <p>Claude API 中相对基础输入的每 token 价格：</p>
+<ul><li>批处理 + 缓存输入：0.05×</li><li>缓存输入：0.1×</li><li>批处理输入：0.5×</li><li>基础输入 token：1×</li><li>输出 token：5×</li></ul>
+<p><strong>做法</strong></p>
+<ul><li><strong>保持前缀稳定</strong>：系统提示词、工具、早期历史</li><li><strong>能等的就批处理</strong>：评测、回填、批量任务</li></ul>
+  </div>
+</section><section class="slide" id="s22">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_agent_design_5/p22.jpg" alt="原版第 22 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">22 / 54</div>
+    <h2>降低每 token 价格：模型路由</h2>
+    <ul><li><strong>预先选择</strong>：在生成之前为每一轮选一个模型。方法：用偏好数据训练的路由器；还可以挑选智能体角色</li><li><strong>失败时升级</strong>：先试便宜模型；检查不通过时换更大的。检查方式：学习得到的评分器、自我验证或执行反馈</li><li><strong>每步重新路由</strong>：随着智能体轨迹增长重新选择模型。方法：根据历史和预算路由；由编排者把模型当作工具来调用</li></ul>
+<div class="callout">难点：便宜模型的一次规划失误，可能浪费后面的大量动作。</div>
+  </div>
+</section><section class="slide" id="s23">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_agent_design_5/p23.jpg" alt="原版第 23 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">23 / 54</div>
+    <h2>降低每 token 价格：后续课程中的系统技术</h2>
+    <p><strong>模型优化</strong></p>
+<ul><li>MoE / 稀疏化</li><li>量化</li><li>剪枝</li><li>蒸馏</li><li>面向特定负载的微调</li></ul>
+<p><strong>推理引擎优化</strong></p>
+<ul><li>推测解码</li><li>KV-cache 优化</li><li>更好的请求调度</li></ul>
+<p><strong>硬件</strong></p>
+<ul><li>更快的 kernel</li><li>更好的 kernel 调度</li><li>专用加速器</li></ul>
+  </div>
+</section><section class="slide" id="s24">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_agent_design_5/p24.jpg" alt="原版第 24 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">24 / 54</div>
+    <h2>降低每 token 价格：相关论文</h2>
+    <ul><li><strong>前缀缓存</strong>：vLLM（2023）PagedAttention；SGLang（2024）RadixAttention 前缀缓存；Prompt Cache（2024）模块化复用</li><li><strong>预先选择</strong>：RouteLLM（2024）学习得到的路由器；MasRouter（2025）同时挑选智能体角色</li><li><strong>失败时升级</strong>：FrugalGPT（2023）学习得到的级联；AutoMix（2023）自我验证；EcoAssistant（2023）执行反馈</li><li><strong>每步重新路由</strong>：ToolOrchestra（2025）小型编排者；BAAR、MTRouter（2026）预算感知</li></ul>
+<div class="callout">ADVANCED——略读，或自行深入</div>
+  </div>
+</section><section class="slide" id="s25">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_agent_design_5/p25.jpg" alt="原版第 25 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">25 / 54</div>
+    <h2>每一项节省都有反向成本</h2>
+    <ul><li><strong>压缩 vs 重建</strong>：被丢掉的文件会被重新读取，而摘要会重写缓存</li><li><strong>路由 vs 更长的失败</strong>：便宜模型的一个坏计划，可能增加许多步骤或导致一次失败的尝试</li><li><strong>子智能体 vs 重复的上下文</strong>：每个子智能体都要重读共享文件和指令</li><li><strong>推测 vs 白费的工作</strong>：猜错会烧 token，还会争抢同一批工具</li></ul>
+<div class="callout">净节省 = 毛节省 − 反向成本；在同一批任务上把两者都测出来。</div>
+  </div>
+</section><section class="slide" id="s26">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_agent_design_5/p26.jpg" alt="原版第 26 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">26 / 54</div>
+    <h2>给每个任务设预算，进展停滞就停下</h2>
+    <div class="tbl"><table><thead><tr><th>每任务上限</th><th>示例</th></tr></thead><tbody><tr><td>金额</td><td>$10</td></tr><tr><td>模型调用</td><td>80 次</td></tr><tr><td>工具耗时</td><td>15 分钟</td></tr><tr><td>每步重试</td><td>2 次</td></tr></tbody></table></div>
+<p>根据实际运行轨迹设定上限，例如成功任务 p95 的 2 倍。</p>
+<p><strong>停止条件</strong></p>
+<ul><li>验证器通过</li><li>N 步内没有新通过的测试</li><li>同一个错误反复出现</li><li>触及某个上限：附上摘要后交回</li></ul>
+<div class="callout">一个带摘要停下来的任务，比一个失控的任务便宜。（示例数值仅作说明）</div>
+  </div>
+</section><section class="slide" id="s27">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_agent_design_5/p27.jpg" alt="原版第 27 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">27 / 54</div>
+    <h2>你真的需要 LLM 吗？</h2>
+    <ul><li><strong>每次步骤都一样？</strong> → 写个脚本：让 LLM 写一次代码，之后直接运行</li><li><strong>输入格式固定？</strong> → 用规则解析：正则、解析器和模板每次调用成本为零</li><li><strong>只是窄范围的标签或打分？</strong> → 训练一个小分类器：GBM 等</li><li><strong>工作流固定、几乎不需要推理？</strong> → 把工作流脚本化：只在需要的步骤调用 LLM</li></ul>
+<div class="callout">只有当某一步需要推理时，才动用 LLM。</div>
+  </div>
+</section><section class="slide" id="s28">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_agent_design_5/p28.jpg" alt="原版第 28 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">28 / 54</div>
+    <h2>让你的智能体更快</h2>
+    <p>更快的智能体通常（但不总是）也更便宜</p>
+<ul><li>加速 LLM 推理服务</li><li>改进编排</li><li>加速工具调用</li><li>并行化工作</li><li>推测式动作</li></ul>
+  </div>
+</section><section class="slide" id="s29">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_agent_design_5/p29.jpg" alt="原版第 29 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">29 / 54</div>
+    <h2>完成时间取决于关键路径，而不是所有步骤之和</h2>
+    <ul><li><strong>串行</strong>：时间 ≈ 每一步之和（排队、准备、预填充、推理、工具、编排）</li><li><strong>并行</strong>：时间 ≈ 关键路径（规划 → 工人 A / 工人 B → 合并），红色为决定完成时间的关键路径</li><li><strong>更便宜可能更慢</strong>：小模型可能需要更多步骤</li><li><strong>并行更贵</strong>：等待更少，但总 token 更多</li></ul>
+  </div>
+</section><section class="slide" id="s30">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_agent_design_5/p30.jpg" alt="原版第 30 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">30 / 54</div>
+    <h2>加速 LLM 推理服务</h2>
+    <p>上一部分所有降成本的技术，同样能降低延迟：</p>
+<ul><li>更少的轮次</li><li>更少的步骤</li><li>更少的 token</li><li>更便宜的推理服务：缓存、更小的模型</li></ul>
+  </div>
+</section><section class="slide" id="s31">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_agent_design_5/p31.jpg" alt="原版第 31 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">31 / 54</div>
+    <h2>改进编排</h2>
+    <ul><li><strong>异步执行</strong>：例如在工具调用运行时就开始下一步</li><li><strong>持久会话</strong>：例如在多个步骤之间保持同一个 shell 或浏览器打开</li><li><strong>流式与流水线</strong>：例如在 LLM 回复结束之前就启动工具调用</li><li><strong>服务同址部署</strong>：例如让工具和模型运行在同一台主机上</li></ul>
+  </div>
+</section><section class="slide" id="s32">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_agent_design_5/p32.jpg" alt="原版第 32 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">32 / 54</div>
+    <h2>加速工具调用</h2>
+    <p>构建、测试和页面加载可能比模型调用本身还慢。</p>
+<ul><li><strong>缓存工具结果</strong>：重复的读取和搜索命中缓存</li><li><strong>更快的硬件</strong>：把重计算放到服务器上，而不是笔记本</li><li><strong>更好的工具</strong>：同样的工作用更快、更便宜的工具；有选择地调用工具</li><li><strong>快速失败</strong>：给卡住的调用设超时</li></ul>
+<div class="callout">在调优模型之前，先测量每一步的工具耗时。</div>
+  </div>
+</section><section class="slide" id="s33">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_agent_design_5/p33.jpg" alt="原版第 33 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">33 / 54</div>
+    <h2>并行化工作</h2>
+    <ul><li><strong>串行</strong>：读文件 A → 读文件 B → 读文件 C</li><li><strong>并行</strong>：同时读文件 A、B、C——同样的工作，只等三分之一的时间</li><li><strong>并行工具调用</strong>：在一步中发出相互独立的调用</li><li><strong>并行子智能体</strong>：拆分独立的子任务；合并摘要</li></ul>
+<div class="callout">只有相互独立的工作才能并行；共享状态需要一个合并步骤。</div>
+  </div>
+</section><section class="slide" id="s34">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_agent_design_5/p34.jpg" alt="原版第 34 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">34 / 54</div>
+    <h2>推测式动作（Speculative actions）</h2>
+    <ol><li><strong>预测</strong>：一个便宜的模型猜测下一个动作</li><li><strong>提前执行</strong>：在主模型思考时就执行这个猜测</li><li><strong>比对</strong>：把猜测与主模型的选择进行对比</li><li><strong>猜中</strong>：结果已经就绪，省掉了等待</li><li><strong>猜错</strong>：丢弃，代价是一次白费的调用</li></ol>
+<div class="callout">当猜测经常正确、且动作可以撤销时才划算。</div>
+<p><strong>开放问题</strong>：在有限的 GPU、CPU 和 API 预算下，如何调度推测调用，使关键路径上节省的时间超过浪费的工作？</p>
+  </div>
+</section><section class="slide" id="s35">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_agent_design_5/p35.jpg" alt="原版第 35 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">35 / 54</div>
+    <h2>推测的对象是什么</h2>
+    <p>范围从单次调用扩展到整条轨迹：</p>
+<ul><li><strong>工具意图</strong>：下一个是哪个工具——SPORK [8]</li><li><strong>工具调用</strong>：工具加上参数——PASTE [5]、Speculative Tool Calls [2]</li><li><strong>下一个动作</strong>：任意动作或 API 响应——Speculative Actions [1]</li><li><strong>分支</strong>：同时探索多条可能路径——B-PASTE [6]</li><li><strong>轨迹</strong>：一条已经执行的多步链——Speculative Macro Commit [10]</li></ul>
+<div class="callout">ADVANCED——略读，或自行深入</div>
+<p class="note">（来源：[1] Speculative Actions (ICLR 2026) · [2] Speculative Tool Calls (arXiv 2025) · [5] PASTE (arXiv 2026) · [6] B-PASTE (arXiv 2026) · [8] SPORK (arXiv 2026) · [10] Speculative Macro Commit (arXiv 2026)）</p>
+  </div>
+</section><section class="slide" id="s36">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_agent_design_5/p36.jpg" alt="原版第 36 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">36 / 54</div>
+    <h2>预测从哪里来</h2>
+    <ul><li><strong>基于模型</strong>：一个小的草稿模型预测大模型下一步会做什么——Speculative Actions [1]、Speculative Tool Calls [2]</li><li><strong>自推测</strong>：同一个模型的一个早期分叉，预测它自己之后的工具调用——SPORK [8]</li><li><strong>基于历史</strong>：用过去的轨迹预测下一个工具，参数绑定到上一个结果——PASTE [5]、Speculate with Memory [9]</li><li><strong>无损</strong>：保留工作之前总是先验证</li><li><strong>有损</strong>：SPAgent [3] 跳过部分检查</li></ul>
+<div class="callout">ADVANCED——略读，或自行深入</div>
+  </div>
+</section><section class="slide" id="s37">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_agent_design_5/p37.jpg" alt="原版第 37 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">37 / 54</div>
+    <h2>两个例子</h2>
+    <p><strong>PASTE [5]——从过去的轨迹预测下一个工具</strong></p>
+<pre><code>search(q)
+  → visit(results[0].url)
+  → extract(page)</code></pre>
+<p>一旦 search(q) 开始，轨迹模式表明接下来会 visit。URL 从搜索结果中填入，所以在模型还在生成时，visit 就已经在运行了。</p>
+<p><strong>SPORK [8]——模型预测它自己的工具调用</strong></p>
+<pre><code>think: 2,000 tokens …
+  early probe → search(q)
+tool_call search(q): ready</code></pre>
+<p>工具意图往往在推理早期就已明确。一个分叉出来的探针提前发起预测的调用，等主模型输出该调用时，结果已经在等着了。</p>
+  </div>
+</section><section class="slide" id="s38">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_agent_design_5/p38.jpg" alt="原版第 38 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">38 / 54</div>
+    <h2>在循环中优化：运行、测量、修改，再来一遍</h2>
+    <ol><li><strong>运行与剖析</strong>：记录每一次调用、token、工具和等待</li><li><strong>测量</strong>：搞清楚成本和延迟的来源</li><li><strong>只改一处</strong>：压缩、路由、缓存或并行</li><li><strong>重新评测</strong>：同一批任务——成功率、花费、p95 延迟</li><li>重复</li></ol>
+<div class="callout">做作业 4 时记住这一点！</div>
+  </div>
+</section><section class="slide" id="s39">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_agent_design_5/p39.jpg" alt="原版第 39 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">39 / 54</div>
+    <h2>智能体架构</h2>
+    <p>单体式 · 模块化 · 微内核</p>
+  </div>
+</section><section class="slide" id="s40">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_agent_design_5/p40.jpg" alt="原版第 40 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">40 / 54</div>
+    <h2>三种 Harness 架构</h2>
+    <ol><li><strong>单体式 Harness</strong>：一切都在一个运行时里——智能体包含记忆、工具、上下文、规划、执行</li><li><strong>模块化 Harness</strong>：接口化，一个控制器——智能体通过 MemoryProvider、ToolProvider、ContextProvider、SandboxProvider 访问组件</li><li><strong>智能体微内核</strong>：内核只保留协调——智能体运行时（状态 · 调度 · 安全）通过标准化协议连接记忆、工具、执行、调度等服务</li></ol>
+<div class="callout">转变：职责从智能体内部移出——从代码，到接口，再到服务。</div>
+  </div>
+</section><section class="slide" id="s41">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_agent_design_5/p41.jpg" alt="原版第 41 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">41 / 54</div>
+    <h2>单体式 Harness：一个运行时实现记忆、工具、上下文、规划和执行</h2>
+    <pre><code>class CodingAgent:
+    def __init__(self):
+        self.memory   = Memory()
+        self.tools    = Tools()
+        self.context  = ContextManager()
+        self.planner  = Planner()
+        self.executor = Executor()
+    def run(self, task):
+        while not self.finished:
+            a = self.planner.plan(task)
+            r = self.executor.execute(a)
+            self.context.update(r)</code></pre>
+<p><strong>优点</strong></p>
+<ul><li>实现和调试简单</li><li>通信开销最小</li><li>内部状态容易共享</li><li>执行开销低</li></ul>
+<p><strong>缺点</strong></p>
+<ul><li>难以替换某个组件</li><li>组件之间紧耦合</li><li>难以在多个智能体之间共享基础设施</li><li>难以强制隔离</li></ul>
+<div class="callout">关键特征：智能体在一个运行时中拥有一切。</div>
+  </div>
+</section><section class="slide" id="s42">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_agent_design_5/p42.jpg" alt="原版第 42 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">42 / 54</div>
+    <h2>模块化 Harness：智能体仍控制循环，但通过接口访问各组件</h2>
+    <pre><code>agent = CodingAgent(
+  memory_provider=RedisMemory(),
+  tool_provider=MCPTools(),
+  context_provider=SlidingWindowContext(),
+  sandbox_provider=DockerSandbox())
+# Docker → Firecracker: swap one provider</code></pre>
+<p>（对比：单体式——智能体内置记忆；模块化——智能体 → MemoryProvider → RedisMemory）</p>
+<p><strong>优点</strong></p>
+<ul><li>组件易于替换</li><li>更好的可测试性和可扩展性</li><li>职责划分清晰</li><li>第三方实现可以直接接入</li></ul>
+<p><strong>缺点</strong></p>
+<ul><li>控制器仍掌管生命周期</li><li>协调逻辑变得复杂</li><li>故障域仍可能共享</li><li>联合调优需要修改控制器</li></ul>
+<div class="callout">关键特征：一个控制器通过接口进行委派。</div>
+  </div>
+</section><section class="slide" id="s43">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_agent_design_5/p43.jpg" alt="原版第 43 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">43 / 54</div>
+    <h2>智能体微内核：一个小运行时负责协调，外部服务提供能力</h2>
+    <p>智能体运行时（状态 · 协调 · 调度 · 安全）→ 标准化协议 → 记忆服务（数据库）/ 工具服务（工具 API）/ 执行服务（沙箱）</p>
+<p>服务可以运行在不同的容器或机器上。</p>
+<p><strong>优点</strong></p>
+<ul><li>服务可独立扩展</li><li>更好的故障隔离</li><li>更强的隔离（前提是强制执行）</li><li>共享的、集中管理的基础设施</li></ul>
+<p><strong>缺点</strong></p>
+<ul><li>通信开销更高</li><li>需要处理更多的故障模式</li><li>端到端调试更难</li><li>需要标准协议和生命周期</li></ul>
+<div class="callout">关键特征：运行时负责协调；外部服务提供能力。</div>
+  </div>
+</section><section class="slide" id="s44">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_agent_design_5/p44.jpg" alt="原版第 44 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">44 / 54</div>
+    <h2>运行一段 Python 代码：只有微内核把沙箱管理交给独立服务</h2>
+    <ol><li><strong>单体式</strong>：智能体在本地执行 Python——跳数最少；难以强制隔离</li><li><strong>模块化</strong>：智能体 → <code>SandboxProvider.run(code)</code> → 执行 Python——换的是 provider，而不是智能体</li><li><strong>微内核</strong>：智能体运行时 → 发送执行请求 → 执行服务 → 分配沙箱 → 执行 Python，返回结果</li></ol>
+<div class="callout">微内核中，执行服务负责沙箱的分配、隔离和生命周期。</div>
+  </div>
+</section><section class="slide" id="s45">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_agent_design_5/p45.jpg" alt="原版第 45 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">45 / 54</div>
+    <h2>微内核用简单和低开销，换来隔离、共享和规模</h2>
+    <div class="tbl"><table><thead><tr><th>维度</th><th>单体式</th><th>模块化</th><th>微内核</th></tr></thead><tbody><tr><td>设计原则</td><td>一切集成</td><td>接口抽象</td><td>最小内核 + 服务</td></tr><tr><td>中央控制器</td><td>有</td><td>有</td><td>有，但被精简</td></tr><tr><td>组件替换</td><td>困难</td><td>容易</td><td>容易（协议匹配的话）</td></tr><tr><td>执行隔离</td><td>可选</td><td>可选</td><td>架构层面的重点</td></tr><tr><td>组件部署</td><td>通常一起</td><td>一起或分开</td><td>往往独立</td></tr><tr><td>独立扩展</td><td>有限</td><td>可能</td><td>强</td></tr><tr><td>通信成本</td><td>低</td><td>低–中</td><td>可能更高</td></tr><tr><td>典型用例</td><td>独立智能体</td><td>智能体框架</td><td>多智能体基础设施</td></tr></tbody></table></div>
+<div class="callout">适用性：独立智能体用单体式，多智能体基础设施用微内核。</div>
+  </div>
+</section><section class="slide" id="s46">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_agent_design_5/p46.jpg" alt="原版第 46 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">46 / 54</div>
+    <h2>八个 Harness</h2>
+    <ul><li><strong>CC · Claude Code</strong>（Anthropic · TypeScript，闭源）：围绕 Claude 的策略层与类型化 Hook</li><li><strong>CX · Codex CLI</strong>（OpenAI · Rust）：沙箱优先，询问其次</li><li><strong>DSH · DeepSeek Harness</strong>（DeepSeek AI · TypeScript）：一切皆插件，连循环也是</li><li><strong>OC · OpenCode</strong>（Anomaly (SST) · TypeScript, Bun）：一个会话服务器 + 若干瘦客户端</li><li><strong>PI · Pi</strong>（Mario Zechner / Earendil · TypeScript）：一个用 TypeScript 扩展的小内核</li><li><strong>OMP · oh-my-pi</strong>（Can Bölük / Stencil Labs · TypeScript + Rust）：Pi 的分支，集成了原生工具和 IDE</li><li><strong>CLAW · OpenClaw</strong>（OpenClaw Foundation · TypeScript）：面向聊天渠道的助手网关</li><li><strong>HM · Hermes Agent</strong>（Nous Research · Python）：会自己编写 Skill 的智能体</li></ul>
+  </div>
+</section><section class="slide" id="s47">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_agent_design_5/p47.jpg" alt="原版第 47 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">47 / 54</div>
+    <h2>Codex CLI 的独特之处</h2>
+    <ul><li><strong>先沙箱，后审批</strong>：命令在没有网络访问的沙箱中运行。只有当需要走出沙箱时，智能体才请求批准。</li><li><strong>遵循语法的补丁</strong>：用一个 Lark 语法定义补丁的外层格式。智能体分四轮匹配 hunk。</li></ul>
+  </div>
+</section><section class="slide" id="s48">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_agent_design_5/p48.jpg" alt="原版第 48 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">48 / 54</div>
+    <h2>DeepSeek Harness 的独特之处</h2>
+    <ul><li><strong>循环本身也是插件</strong>：循环、适配器、工具、日志和审批都是插件。可以用 YAML 分层替换任意插件。</li><li><strong>从日志生成请求</strong>：每个请求都是会话日志的一个冻结视图。Harness 只向这个日志追加条目。</li><li><strong>比较并交换（CAS）式编辑</strong>：如果文件在模型上次读取之后被改动过，编辑就会失败。</li></ul>
+  </div>
+</section><section class="slide" id="s49">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_agent_design_5/p49.jpg" alt="原版第 49 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">49 / 54</div>
+    <h2>OpenCode 的独特之处</h2>
+    <ul><li><strong>Harness 是一个服务器</strong>：TUI、SDK 和 Web 应用都使用同一个 OpenAPI HTTP 服务器。</li><li><strong>带大小限制的模糊编辑</strong>：九种替换器，从精确匹配到锚点匹配逐级放宽。匹配范围过大的模糊匹配会被 Harness 拒绝。</li><li><strong>每一步都有快照</strong>：一个影子 git 仓库让 /undo 能恢复文件，而不只是聊天记录。</li></ul>
+  </div>
+</section><section class="slide" id="s50">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_agent_design_5/p50.jpg" alt="原版第 50 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">50 / 54</div>
+    <h2>Pi 的独特之处</h2>
+    <ul><li><strong>极简内核</strong>：内核只有四个工具，没有 MCP、子智能体或审批。其余所有功能都由扩展提供。</li><li><strong>带价格检查的缓存预热</strong>：只有在预期节省达到 $0.05 或以上时，Pi 才发送保活请求。</li><li><strong>可供其他项目使用的库</strong>：pi-ai 支持 10 种 wire API 上的 42 个提供商。另有三个项目使用了 Pi 的代码。</li></ul>
+  </div>
+</section><section class="slide" id="s51">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_agent_design_5/p51.jpg" alt="原版第 51 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">51 / 54</div>
+    <h2>oh-my-pi 的独特之处</h2>
+    <ul><li><strong>Hashline 编辑</strong>：每次编辑给出一个 4 位十六进制的文件标签和行号，模型无需再把旧文本敲一遍。</li><li><strong>进程内的 IDE</strong>：所有调用共用一个常开的 shell。原生工具提供搜索、AST、LSP 和调试器。</li><li><strong>特殊的上下文方法</strong>：snapcompact 把旧历史转换成图片；TTSR 在正则匹配时停止并重试。</li></ul>
+  </div>
+</section><section class="slide" id="s52">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_agent_design_5/p52.jpg" alt="原版第 52 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">52 / 54</div>
+    <h2>OpenClaw 的独特之处</h2>
+    <ul><li><strong>带队列通道的聊天网关</strong>：27 个聊天渠道把消息发送到每个会话的一条通道中。队列模式控制运行期间到达的消息如何处理。</li><li><strong>压缩前先记忆</strong>：先用一个静默轮次写下带日期的笔记。回忆时同时使用全文搜索和向量搜索。</li><li><strong>围栏、污点与哨兵</strong>：围栏隔离不可信文本；一次网络读取会让该轮次被标记为“污染”；智能体监控机密哨兵（secret sentinels）。</li></ul>
+  </div>
+</section><section class="slide" id="s53">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_agent_design_5/p53.jpg" alt="原版第 53 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">53 / 54</div>
+    <h2>Hermes Agent 的独特之处</h2>
+    <ul><li><strong>会学习的分叉</strong>：一个后台分叉检查每个被提醒的轮次，然后编辑记忆和 Skill。</li><li><strong>最早的压缩</strong>：在窗口用到 50% 时就开始压缩——八个 Harness 中最早的。</li><li><strong>执行前先保存</strong>：在产生任何副作用之前，智能体先把工具调用记录写入会话数据库。</li></ul>
+  </div>
+</section><section class="slide" id="s54">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_agent_design_5/p54.jpg" alt="原版第 54 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">54 / 54</div>
+    <h2>下节课</h2>
+    <ul><li>智能体安全与防护</li><li>自我演进的 Harness</li></ul>
+  </div>
+</section><nav class="pager"><a href="7_agent_design_4.html">← L07 智能体设计 IV：智能体评测</a><a href="9_llm_serving_basics_1.html">L09 高效 LLM 推理服务基础 I：LLM 入门 →</a></nav></main>
+</div>
+<div class="lightbox" hidden><img alt=""></div>
+<script src="../assets/app.js"></script>
+</body>
+</html>

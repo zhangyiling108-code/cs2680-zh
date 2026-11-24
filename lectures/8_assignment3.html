@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A3 作业 3 — Mads-Opt：Harness 优化竞赛 · CS2680</title>
+<link rel="stylesheet" href="../assets/style.css">
+
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">CS2680 <span>现代 AI 系统</span></a>
+  <nav class="lecnav"><a href="../lectures/1_intro.html">L01</a><a href="../lectures/2_agent_use_1.html">L02</a><a href="../lectures/3_agent_use_2.html">L03</a><a href="../lectures/4_agent_design_1.html">L04</a><a href="../lectures/5_agent_design_2.html">L05</a><a href="../lectures/6_agent_design_3.html">L06</a><a href="../lectures/7_agent_design_4.html">L07</a><a href="../lectures/8_agent_design_5.html">L08</a><a href="../lectures/9_llm_serving_basics_1.html">L09</a><a href="../lectures/10_llm_serving_basics_2a.html">L10</a><a href="../lectures/10_llm_serving_basics_2b.html">L11</a><a href="../lectures/11_llm_serving_basics_3.html">L12</a><a href="../lectures/12_llm_serving_spec_decoding.html">L13</a><a class="on" href="../lectures/8_assignment3.html">A3</a></nav>
+  <div class="tools">
+    <div class="seg" role="group" aria-label="显示模式">
+      <button data-mode="both" title="原图 + 中文">对照</button>
+      <button data-mode="zh" title="只看中文">中文</button>
+      <button data-mode="img" title="只看原版">原版</button>
+    </div>
+    <button class="theme" title="切换深浅色" aria-label="切换深浅色">◐</button>
+  </div>
+</header>
+<div class="layout">
+  <aside class="toc"><div class="toc-h">本讲目录</div><ol><li><a href="#s1"><b>1</b>作业 3：MadsOpt——Harness 优化竞赛</a></li><li><a href="#s2"><b>2</b>框架</a></li><li><a href="#s3"><b>3</b>框架</a></li><li><a href="#s4"><b>4</b>限制</a></li><li><a href="#s5"><b>5</b>代码结构</a></li><li><a href="#s6"><b>6</b>排行榜提交</a></li><li><a href="#s7"><b>7</b>评分</a></li></ol></aside>
+  <main><div class="hero">
+  <div class="kicker">附 · 作业讲义 · 作业 3 · 10-05 发布</div>
+  <h1>作业 3 — Mads-Opt：Harness 优化竞赛</h1>
+  <div class="en">Assignment 3 — Mads-Opt: Harness Competition</div>
+  <p class="lead">优化你的编程智能体 Harness，让每个 token 都物有所值；按排行榜排名与相对基线的提升计分。</p>
+  
+  <div class="meta">共 7 页 · 原版 PDF：<a href="../../8_assignment3.pdf">8_assignment3.pdf</a> · 键盘 ←/→ 或 J/K 翻页</div>
+</div><section class="slide" id="s1">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_assignment3/p01.jpg" alt="原版第 1 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">1 / 7</div>
+    <h2>作业 3：MadsOpt——Harness 优化竞赛</h2>
+    
+  </div>
+</section><section class="slide" id="s2">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_assignment3/p02.jpg" alt="原版第 2 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">2 / 7</div>
+    <h2>框架</h2>
+    <ul><li>26 个任务，3 种类型的容器</li><li>智能体和任务位于不同的容器中，通过 HTTP 请求访问任务</li><li>离线评测，只能访问 api.cs2680.com</li></ul>
+  </div>
+</section><section class="slide" id="s3">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_assignment3/p03.jpg" alt="原版第 3 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">3 / 7</div>
+    <h2>框架</h2>
+    <ul><li>调度器（Dispatcher）把任务信息传给你的智能体</li><li>智能体处理任务并生成一个补丁</li><li>补丁被评测，结果发回给智能体</li><li>最多同时并行 5 个任务</li></ul>
+  </div>
+</section><section class="slide" id="s4">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_assignment3/p04.jpg" alt="原版第 4 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">4 / 7</div>
+    <h2>限制</h2>
+    <ul><li>三种模型：Expert、Standard、Starter</li><li>时间限制：<ul><li>每次 evaluate() 35 分钟</li><li>总计 4 小时</li></ul></li><li>成本限制：<ul><li>每天 $30</li><li>每次运行 $10</li></ul></li></ul>
+  </div>
+</section><section class="slide" id="s5">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_assignment3/p05.jpg" alt="原版第 5 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">5 / 7</div>
+    <h2>代码结构</h2>
+    <ul><li><strong>init.sh、package_claude_sessions.py</strong>：生成会话日志</li><li><strong>src</strong>：智能体逻辑、沙箱请求<ul><li>打成 zip，这是上传到排行榜的<strong>唯一</strong>文件</li></ul></li><li><strong>dispatcher、evaluation_scripts</strong>：调度逻辑和用于评分的测试<ul><li>与排行榜上使用的完全相同，本地测试时不要修改</li></ul></li></ul>
+  </div>
+</section><section class="slide" id="s6">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_assignment3/p06.jpg" alt="原版第 6 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">6 / 7</div>
+    <h2>排行榜提交</h2>
+    <ul><li>用 Canvas 上的邮箱登录，密码为 <code>Cs2680-&lt;你的 8 位学号&gt;</code></li><li>提交 src.zip</li><li>同一时间只能有一个提交在队列中，如果看起来不理想，请取消该提交</li><li>提交按以下指标衡量：<ul><li>解决的任务数</li><li>每个已解决任务的成本</li><li>每个已解决任务的耗时</li></ul></li><li>被取消的提交同样计数，并消耗当日预算</li></ul>
+  </div>
+</section><section class="slide" id="s7">
+  <figure class="orig"><img loading="lazy" src="../assets/slides/8_assignment3/p07.jpg" alt="原版第 7 页" width="1280" height="720"></figure>
+  <div class="zh">
+    <div class="pno">7 / 7</div>
+    <h2>评分</h2>
+    <ul><li>基于三个指标的天际线（skyline，即帕累托前沿）<ul><li>至少解决 7 个任务</li><li>排名计算排在它前面的所有人：1, 1, 1, 4, ……</li></ul></li><li>基线：解决 16 个任务</li><li>分数计算方式：<ul><li>如果你有任一提交达到基线：max(81 − r, 50)</li><li>否则：81 − r</li></ul></li><li>排行榜占 80 分，另有 10 分给书面报告、10 分给视频</li></ul>
+  </div>
+</section><nav class="pager"><a href="12_llm_serving_spec_decoding.html">← L13 高效 LLM 推理服务：推测解码</a><span></span></nav></main>
+</div>
+<div class="lightbox" hidden><img alt=""></div>
+<script src="../assets/app.js"></script>
+</body>
+</html>
